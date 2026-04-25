@@ -252,6 +252,7 @@ def _render_tools(log: RolloutLog) -> None:
         {
             "fall_detection": last.get("fall_detection"),
             "side_effects": last.get("side_effects"),
+            "side_effect_load": last.get("state", {}).get("side_effect_load") if isinstance(last.get("state", {}), dict) else None,
             "cvd_event": last.get("cvd_event"),
             "action_parse": last.get("action_parse"),
         }

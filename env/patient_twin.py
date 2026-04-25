@@ -89,6 +89,10 @@ class PatientState:
     diastolic_bp: float = 85.0
     egfr: float = 90.0
 
+    # severity / toxicity summary signals (0..1)
+    disease_stage: float = 0.55
+    side_effect_load: float = 0.0
+
     # derived / comorbidity flags (may flip with progression)
     hypertension: bool = True
     ckd: bool = False
@@ -97,11 +101,33 @@ class PatientState:
     # regimen
     lifestyle_intensity: float = 0.3  # 0..1
     meds: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # drug -> {"dose":0..1,"weeks_on":int}
+    time_on_treatment: int = 0  # weeks since current regimen started (max weeks_on)
+    treatment_history: List[Dict[str, Any]] = field(default_factory=list)
 
     # event tracking
     last_side_effects: List[Dict[str, Any]] = field(default_factory=list)
     cumulative_cost_usd: float = 0.0
     adherence: float = 0.85  # 0..1
+
+
+def compute_disease_stage(state: PatientState) -> float:
+    """
+    Map multi-biomarker status into a 0..1 severity scalar.
+    0.0 ~ remission/normal, 1.0 ~ critical.
+    """
+    # Normalize
+    h = _clip((state.hba1c - 5.6) / (12.5 - 5.6), 0.0, 1.0)
+    g = _clip((state.fasting_glucose - 90.0) / (320.0 - 90.0), 0.0, 1.0)
+    renal = _clip((60.0 - state.egfr) / 60.0, 0.0, 1.0)  # egfr <60 worsens
+    bp = _clip((state.systolic_bp - 120.0) / 60.0, 0.0, 1.0)
+
+    stage = 0.45 * h + 0.25 * g + 0.20 * renal + 0.10 * bp
+    # hard bumps for complications
+    if state.cvd:
+        stage += 0.10
+    if state.egfr < 30.0:
+        stage += 0.10
+    return float(_clip(stage, 0.0, 1.0))
 
 
 def sample_patient_profile(rng: np.random.Generator, patient_id: str) -> PatientProfile:
@@ -179,6 +205,10 @@ def initialize_patient_state(rng: np.random.Generator, profile: PatientProfile) 
         cumulative_cost_usd=0.0,
         adherence=float(_clip(rng.normal(0.85, 0.07), 0.55, 0.98)),
     )
+    state.disease_stage = compute_disease_stage(state)
+    state.side_effect_load = 0.0
+    state.time_on_treatment = 0
+    state.treatment_history = []
     return state
 
 
@@ -290,6 +320,18 @@ def progression_step(
     for drug in list(state.meds.keys()):
         state.meds[drug]["weeks_on"] = int(state.meds[drug].get("weeks_on", 0) + 1)
 
+    # time_on_treatment: longest-running active med (or 0)
+    state.time_on_treatment = int(max([int(m.get("weeks_on", 0)) for m in state.meds.values()], default=0))
+
+    # toxicity accumulation (side_effect_load): add severity, with small decay
+    state.side_effect_load = float(_clip(state.side_effect_load * 0.92, 0.0, 1.0))
+    if side_effects:
+        add = sum(float(ev.get("severity", 1)) for ev in side_effects) / 5.0
+        state.side_effect_load = float(_clip(state.side_effect_load + 0.10 * add, 0.0, 1.0))
+
+    # update disease stage scalar
+    state.disease_stage = compute_disease_stage(state)
+
     info = {
         "weekly_cost_usd": weekly_cost,
         "side_effects": side_effects,
@@ -356,6 +398,16 @@ def apply_treatment_action(
     # small adherence perturbation with regimen complexity / side effects expectation
     complexity = len(state.meds)
     state.adherence = float(_clip(state.adherence - 0.01 * max(complexity - 1, 0) + rng.normal(0, 0.01), 0.35, 0.99))
+
+    # record in treatment history (high-level; keeps the blueprint requirement)
+    state.treatment_history.append(
+        {
+            "week": int(state.week),
+            "action": dict(action),
+            "active_meds": {k: {"dose": float(v.get("dose", 0.0)), "weeks_on": int(v.get("weeks_on", 0))} for k, v in state.meds.items()},
+            "lifestyle": float(state.lifestyle_intensity),
+        }
+    )
     return info
 
 
@@ -402,11 +454,15 @@ class PatientTwin:
                 "systolic_bp": self.state.systolic_bp,
                 "diastolic_bp": self.state.diastolic_bp,
                 "egfr": self.state.egfr,
+                "disease_stage": self.state.disease_stage,
+                "side_effect_load": self.state.side_effect_load,
                 "hypertension": self.state.hypertension,
                 "ckd": self.state.ckd,
                 "cvd": self.state.cvd,
                 "lifestyle_intensity": self.state.lifestyle_intensity,
                 "meds": self.state.meds,
+                "time_on_treatment": self.state.time_on_treatment,
+                "treatment_history": self.state.treatment_history[-50:],
                 "last_side_effects": self.state.last_side_effects,
                 "cumulative_cost_usd": self.state.cumulative_cost_usd,
                 "adherence": self.state.adherence,
