@@ -252,12 +252,34 @@ def _render_tools(log: RolloutLog) -> None:
         {
             "fall_detection": last.get("fall_detection"),
             "side_effects": last.get("side_effects"),
-            "side_effect_load": last.get("state", {}).get("side_effect_load") if isinstance(last.get("state", {}), dict) else None,
             "cvd_event": last.get("cvd_event"),
             "action_parse": last.get("action_parse"),
         }
     )
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _sanitize_obs_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Streamlit sessions can carry old state across hot reloads; also some rows can
+    miss keys. Coerce numeric columns and forward-fill to avoid NaN KPIs/plots.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy()
+    # Normalize expected columns if missing
+    expected = ["week", "hba1c", "fasting_glucose", "bmi", "systolic_bp", "egfr", "ckd", "cvd"]
+    for c in expected:
+        if c not in out.columns:
+            out[c] = pd.NA
+
+    for c in expected:
+        out[c] = pd.to_numeric(out[c], errors="coerce")
+
+    out = out.sort_values("week", kind="stable")
+    out = out.ffill()
+    return out
 
 
 def main():
@@ -305,7 +327,7 @@ def main():
             st.code(json.dumps(action, indent=2), language="json")
 
     log: RolloutLog = st.session_state.log
-    df = pd.DataFrame(log.obs)
+    df = _sanitize_obs_df(pd.DataFrame(log.obs))
     df["reward"] = [None] + log.rewards
     df["return_to_date"] = pd.Series([0.0] + list(pd.Series(log.rewards).cumsum()))
 

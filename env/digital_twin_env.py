@@ -40,9 +40,6 @@ class DigitalTwinDiabetesEnv(gym.Env):
                 "egfr": gym.spaces.Box(low=5.0, high=160.0, shape=(), dtype=float),
                 "ckd": gym.spaces.Discrete(2),
                 "cvd": gym.spaces.Discrete(2),
-                "disease_stage": gym.spaces.Box(low=0.0, high=1.0, shape=(), dtype=float),
-                "side_effect_load": gym.spaces.Box(low=0.0, high=1.0, shape=(), dtype=float),
-                "time_on_treatment": gym.spaces.Box(low=0, high=self.max_steps, shape=(), dtype=int),
             }
         )
         self.action_space = gym.spaces.Dict({})  # JSON dict externally validated in Phase 4
@@ -128,8 +125,5 @@ class DigitalTwinDiabetesEnv(gym.Env):
             "egfr": float(s.egfr),
             "ckd": int(bool(s.ckd)),
             "cvd": int(bool(s.cvd)),
-            "disease_stage": float(getattr(s, "disease_stage", 0.0)),
-            "side_effect_load": float(getattr(s, "side_effect_load", 0.0)),
-            "time_on_treatment": int(getattr(s, "time_on_treatment", 0)),
         }
 
