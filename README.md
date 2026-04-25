@@ -150,6 +150,7 @@ python scripts/run_sanity.py
 Open:
 - `training/train_trl_colab.ipynb` — quick smoke + single-model judge preset
 - `training/colab_judge_pipeline.ipynb` — **judge pipeline**: random baseline vs **DistilGPT2** vs **Unsloth/large** (same `--judge-schedule`), two bar charts + optional curve overlay
+- `training/colab_http_clinical_pipeline.ipynb` — **HTTP demo**: `uvicorn dtm_openenv.server.app:app`, rule-based vs LM policies with **real `DTMAction` JSON** (not MetaGuard-style strings), optional glucose trajectory plot
 
 Colab steps:
 1. **File → Open notebook → GitHub** (paste your repo URL) and open the notebook.
