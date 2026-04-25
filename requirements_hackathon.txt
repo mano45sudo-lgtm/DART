@@ -13,6 +13,7 @@ accelerate
 datasets
 wandb
 huggingface_hub
+torch
 
 # Unsloth may not support every Windows setup; keep optional.
 unsloth; platform_system != "Windows"

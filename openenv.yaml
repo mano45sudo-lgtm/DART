@@ -1,15 +1,25 @@
 name: digital-twin-medicine-t2dm
 version: 0.1.0
-entrypoint: env.openenv_adapter:OpenEnvDigitalTwinAdapter
 description: "Digital twin T2DM environment with tool-augmented RL/LLM agent interface."
+spec_version: 1
 
-observation:
-  format: json
-  schema: schemas/patient_observation.schema.json
+client:
+  class_name: DigitalTwinMedicineClient
+  module: dtm_openenv.client
 
 action:
-  format: json
-  schema: schemas/treatment_action.schema.json
+  class_name: DTMAction
+  module: dtm_openenv.models
+
+observation:
+  class_name: DTMObservation
+  module: dtm_openenv.models
+
+state:
+  class_name: DTMState
+  module: dtm_openenv.models
+
+default_image: "digital-twin-medicine-openenv:latest"
 
 episode:
   max_steps: 52
