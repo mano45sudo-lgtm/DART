@@ -1,0 +1,19 @@
+# Hackathon requirements (optional heavyweight deps)
+# Install with: pip install -r requirements_hackathon.txt
+
+-r requirements.txt
+
+# OpenEnv (latest)
+openenv
+
+# Training stack (HF TRL / Unsloth / Transformers)
+trl
+transformers
+accelerate
+datasets
+wandb
+huggingface_hub
+
+# Unsloth may not support every Windows setup; keep optional.
+unsloth; platform_system != "Windows"
+

@@ -1,0 +1,13 @@
+[project]
+name = "digital-twin-medicine"
+version = "0.1.0"
+description = "Digital Twin Medicine — RL Agent for Personalized Treatment (OpenEnv-style)"
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = []
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

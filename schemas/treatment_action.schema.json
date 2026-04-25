@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "treatment_action_v1",
+  "title": "TreatmentActionV1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["noop", "start", "add", "stop", "switch", "dose_adjust"]
+    },
+    "drug": {
+      "type": "string",
+      "enum": ["none", "metformin", "sulfonylurea", "dpp4", "glp1", "sglt2", "insulin"]
+    },
+    "dose": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "lifestyle": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Lifestyle intensity 0..1"
+    },
+    "from_drug": {
+      "type": "string",
+      "enum": ["none", "metformin", "sulfonylurea", "dpp4", "glp1", "sglt2", "insulin"]
+    },
+    "to_drug": {
+      "type": "string",
+      "enum": ["none", "metformin", "sulfonylurea", "dpp4", "glp1", "sglt2", "insulin"]
+    },
+    "rationale": { "type": "string" },
+    "meta": { "type": "object" }
+  },
+  "required": ["type"],
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "enum": ["start", "add", "dose_adjust", "stop"] } } },
+      "then": { "required": ["drug"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "switch" } } },
+      "then": { "required": ["from_drug", "to_drug"] }
+    }
+  ]
+}
+

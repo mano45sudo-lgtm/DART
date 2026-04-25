@@ -1,0 +1,27 @@
+name: digital-twin-medicine-t2dm
+version: 0.1.0
+entrypoint: env.openenv_adapter:OpenEnvDigitalTwinAdapter
+description: "Digital twin T2DM environment with tool-augmented RL/LLM agent interface."
+
+observation:
+  format: json
+  schema: schemas/patient_observation.schema.json
+
+action:
+  format: json
+  schema: schemas/treatment_action.schema.json
+
+episode:
+  max_steps: 52
+  step_unit: week
+
+tools:
+  - tools/ehr_analyzer.py:analyze_ehr
+  - tools/genomic_profiler.py:profile_genomics
+  - tools/drug_interaction_checker.py:check_drug_interactions
+  - tools/disease_progression_model.py:forecast_progression
+  - tools/trial_simulator.py:simulate_trial
+  - tools/biomarker_tracker.py:track_biomarkers
+  - tools/resistance_detector.py:detect_resistance
+  - tools/risk_predictor.py:predict_risk
+

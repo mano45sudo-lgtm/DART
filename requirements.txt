@@ -1,0 +1,19 @@
+numpy>=1.26
+pandas>=2.2
+scipy>=1.12
+pydantic>=2.7
+PyYAML>=6.0.1
+matplotlib>=3.8
+tqdm>=4.66
+gymnasium>=0.29.1
+
+# Notebook / training scaffold
+jupyter>=1.0
+ipykernel>=6.29
+
+# Optional quality-of-life
+rich>=13.7
+
+# UI
+streamlit>=1.35
+plotly>=5.22

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "patient_observation_v1",
+  "title": "PatientObservationV1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "week": { "type": "integer", "minimum": 0 },
+    "hba1c": { "type": "number" },
+    "fasting_glucose": { "type": "number" },
+    "bmi": { "type": "number" },
+    "systolic_bp": { "type": "number" },
+    "egfr": { "type": "number" },
+    "ckd": { "type": "integer", "enum": [0, 1] },
+    "cvd": { "type": "integer", "enum": [0, 1] }
+  },
+  "required": ["week", "hba1c"]
+}
+
