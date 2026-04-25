@@ -12,10 +12,10 @@ from evaluation.baseline_random_agent import RandomAgent  # noqa: E402
 from evaluation.eval_metrics import compute_episode_metrics, summarize  # noqa: E402
 
 
-def run(agent, *, episodes: int = 50, seed: int = 0):
+def run(agent, *, episodes: int = 50, seed: int = 0, max_steps: int = 24):
     metrics = []
     for ep in range(episodes):
-        env = DigitalTwinDiabetesEnv(seed=seed + ep, max_steps=24)
+        env = DigitalTwinDiabetesEnv(seed=seed + ep, max_steps=max_steps)
         obs, _ = env.reset(seed=seed + ep)
         traj_obs = [obs]
         traj_info = []
@@ -30,6 +30,11 @@ def run(agent, *, episodes: int = 50, seed: int = 0):
             done = bool(term or trunc)
         metrics.append(compute_episode_metrics(traj_obs, traj_info, rewards))
     return metrics
+
+
+def evaluate_agent(agent, *, episodes: int, seed: int = 0, max_steps: int = 24):
+    """Public helper for baseline vs trained comparisons (same protocol as `run`)."""
+    return run(agent, episodes=episodes, seed=seed, max_steps=max_steps)
 
 
 def main():

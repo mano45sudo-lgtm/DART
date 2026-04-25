@@ -62,13 +62,14 @@ python scripts/plot_rewards.py
 Plot (committed):
 - `logs/baseline_returns.png` — episode return vs episode (random agent)
 
-### Trained (HF TRL PPO in Colab)
+### Trained (Colab REINFORCE on env rollouts)
 Notebook:
 - `training/train_trl_colab.ipynb`
 
-You must export and commit:
-- `logs/trained_returns.png` — **avg return vs training iteration**
-- (optional) `logs/parse_ok_rate.png` — JSON action parse success vs iteration
+Generated artifacts (commit these):
+- `logs/training_last.json` — full protocol + baseline/trained metrics
+- `docs/figures/training_vs_baselines.png` — training curve + baseline bands on same axes
+- `docs/figures/final_random_vs_trained.png` — final held-out comparison with error bars
 
 ## 5) Reproduce locally (Windows PowerShell)
 
@@ -111,7 +112,7 @@ pip install -r requirements.txt
 python scripts/run_sanity.py
 ```
 
-## 7) Google Colab (HF TRL end-to-end training)
+## 7) Google Colab (end-to-end env training)
 
 Open:
 - `training/train_trl_colab.ipynb`
@@ -119,10 +120,15 @@ Open:
 Colab steps:
 1. **File → Open notebook → GitHub** (paste your repo URL) and open the notebook.
 2. Run install cell(s).
-3. Run training cells until reward curve stabilizes (don’t stop after 2–3 iterations).
-4. Save plots as PNG and commit to `logs/`:
-   - `logs/trained_returns.png`
-   - (optional) `logs/parse_ok_rate.png`
+3. Set `REPO_ROOT` in the notebook (e.g., `/content/mano/DART`).
+4. Run the quick smoke cell once:
+   - `python scripts/train_reinforce_twin.py --quick`
+5. Run the judge-ready command (GPU recommended):
+   - `python scripts/train_reinforce_twin.py --updates 120 --episodes-per-update 4 --eval-seeds 32 --random-eval-episodes 80 --model distilgpt2`
+6. Commit these generated artifacts:
+   - `logs/training_last.json`
+   - `docs/figures/training_vs_baselines.png`
+   - `docs/figures/final_random_vs_trained.png`
 
 ## 8) Hugging Face Spaces (discoverable + runnable)
 

@@ -7,6 +7,8 @@ COPY dtm_openenv /app/dtm_openenv
 COPY env /app/env
 COPY tools /app/tools
 COPY reward /app/reward
+# requirements_hackathon.txt includes `-r requirements.txt`; both must be present
+COPY requirements.txt /app/requirements.txt
 COPY requirements_hackathon.txt /app/requirements_hackathon.txt
 
 RUN pip install --no-cache-dir -U pip && \
