@@ -148,7 +148,8 @@ python scripts/run_sanity.py
 ## 7) Google Colab (end-to-end env training)
 
 Open:
-- `training/train_trl_colab.ipynb`
+- `training/train_trl_colab.ipynb` — quick smoke + single-model judge preset
+- `training/colab_judge_pipeline.ipynb` — **judge pipeline**: random baseline vs **DistilGPT2** vs **Unsloth/large** (same `--judge-schedule`), two bar charts + optional curve overlay
 
 Colab steps:
 1. **File → Open notebook → GitHub** (paste your repo URL) and open the notebook.
@@ -163,6 +164,85 @@ Colab steps:
    - `logs/training_last.json`
    - `docs/figures/training_vs_baselines.png`
    - `docs/figures/final_random_vs_trained.png`
+
+### 7b) Colab: random baseline + small GPT vs ~8B (Unsloth 4-bit) on one figure
+
+Use the **same eval protocol** for every run (defaults already match if you only change `--model` and `--out-json`).
+
+1. **Runtime:** `Runtime → Change runtime type → GPU` (T4 minimum; **A100** much safer for 8B + training).
+2. **Install:** `pip install -q -r requirements_hackathon.txt` (includes `bitsandbytes`, `transformers`, `torch`).
+3. **HF access:** Many Llama checkpoints are **gated**. On the model page click *Access repository*, then in Colab run `huggingface-cli login` and paste a **read** token, or set the `HF_TOKEN` secret and `huggingface_hub.login()`.
+4. **Pick the model:** On [huggingface.co/unsloth](https://huggingface.co/unsloth) search for **8B** and prefer a **`bnb-4bit`** (or `unsloth-bnb-4bit`) weight so one GPU fits. Example: `unsloth/Meta-Llama-3.1-8B-Instruct-unsloth-bnb-4bit`.
+5. **Train the small baseline LM** (separate JSON so you can compare later):
+
+   `python scripts/train_reinforce_twin.py --judge-schedule --model distilgpt2 --out-json logs/training_last_distil.json`
+
+6. **Train the 8B model** (4-bit load; add `--trust-remote-code` only if the model card says so):
+
+   `python scripts/train_reinforce_twin.py --judge-schedule --load-in-4bit --model unsloth/Meta-Llama-3.1-8B-Instruct-unsloth-bnb-4bit --out-json logs/training_last_8b.json`
+
+7. **One comparison PNG** (random baseline + both learning curves + final bars):
+
+   `python scripts/plot_compare_training_runs.py --run logs/training_last_distil.json:DistilGPT2 --run logs/training_last_8b.json:8B-Instruct-4bit --out docs/figures/compare_small_vs_8b.png`
+
+8. **Commit:** add `logs/training_last_distil.json`, `logs/training_last_8b.json`, `docs/figures/compare_small_vs_8b.png`, and embed the image in your README or writeup.
+
+If you run out of VRAM, lower workload before changing eval seeds (e.g. `--updates 60 --episodes-per-update 2`) so the two runs stay **identical** in schedule.
+
+## 7c) Spend Hugging Face **credits** on training (GPU Space, step-by-step)
+
+Downloading weights into Colab does **not** use Hub credits. To use the **$30 (or any) HF balance**, run training on **Hugging Face’s paid GPU** — here via a **Docker Space** that executes `train_reinforce_twin.py` once, then **exits** so billing stops.
+
+### A) Credits and billing
+
+1. Open **[huggingface.co/settings/billing](https://huggingface.co/settings/billing)** and confirm your **balance / credits** (or redeem the voucher your organizers sent).
+2. Read **[Using GPU Spaces](https://huggingface.co/docs/hub/spaces-gpus)** — you are billed **per minute** while the Space hardware is **Starting** or **Running** on a paid GPU.
+
+### B) Create the training Space
+
+1. Go to **[huggingface.co/new-space](https://huggingface.co/new-space)**.
+2. **Owner:** your user or org. **Space name:** e.g. `dart-gpu-training`. **License:** match your repo.
+3. **SDK:** **Docker** (not Gradio).
+4. **Hardware:** leave **CPU basic** until the first build succeeds, then upgrade (next step). This avoids paying GPU during a broken build loop.
+5. **Create** the Space, then connect **GitHub** (or Git) so this repository is linked — same flow as your other Space.
+
+### C) Point the Space at the training Dockerfile
+
+1. In the Space: **Settings → Dev mode** (or **Files and versions**): set the **Dockerfile path** to  
+   `DART/spaces/hf_gpu_training/Dockerfile`  
+   (if your **Git root** is the parent repo that contains `DART/`).
+2. If your **Git root is only `DART`** (no `DART/` subfolder), set a **Docker build argument** in Space **Settings → Variables** (build-time):  
+   `DART_PREFIX` = `.`  
+   and set the Dockerfile path to `spaces/hf_gpu_training/Dockerfile` (paths relative to DART root).
+
+### D) Secrets (gated models)
+
+1. **Settings → Secrets**: add **`HF_TOKEN`** with a **read** token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) so `from_pretrained` can download gated weights.
+
+### E) What command runs (Space “Variables”)
+
+1. **Settings → Variables** (runtime): add **`TRAIN_ARGS`** (single line), for example:
+
+   `--judge-schedule --model distilgpt2 --out-json logs/training_last.json`
+
+   For an 8B 4-bit run (VRAM permitting):
+
+   `--judge-schedule --load-in-4bit --model unsloth/Meta-Llama-3.1-8B-Instruct-unsloth-bnb-4bit --out-json logs/training_last_8b.json`
+
+2. Optional — save outputs to a **Dataset** repo so files survive after the job ends: create an empty **Dataset** on HF (e.g. `yourname/dart-training-runs`), then add variable **`HF_UPLOAD_REPO`** = `yourname/dart-training-runs`. The entrypoint runs `scripts/upload_hf_space_artifacts.py` after training.
+
+### F) Turn on the GPU (this uses credits)
+
+1. **Settings → Hardware**: choose **Nvidia T4 - small** (or larger if you need VRAM; see [GPU pricing](https://huggingface.co/docs/hub/spaces-gpus)).
+2. **Save / Rebuild** and open the **Logs** tab until you see `wrote .../training_last.json` and plot paths.
+3. When the job finishes, the container **exits** so you are not left with an idle GPU loop — **still** open **Settings → Hardware** and set back to **CPU basic** (or **Pause** the Space) so you do not pay for a restarted Space you forgot about.
+
+### G) Get plots into your GitHub README
+
+1. If you used **`HF_UPLOAD_REPO`**, open that **Dataset** on the Hub and **download** `training_last.json` and the PNGs into your laptop repo under `logs/` and `docs/figures/`, then `git add` / `git commit` / `git push`.
+2. Or copy the same files from the Space **build logs** only if you attached them as build artifacts (not reliable) — **Dataset upload is recommended**.
+
+Template files for this Space live under **`spaces/hf_gpu_training/`** in this repo.
 
 ## 8) Hugging Face Spaces (discoverable + runnable)
 

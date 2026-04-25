@@ -13,17 +13,21 @@ from env.digital_twin_env import DigitalTwinDiabetesEnv
 
 def obs_to_prompt(obs: Dict[str, Any]) -> str:
     return (
-        "You are a treatment policy. Output ONE JSON action only.\n"
+        "You are a diabetes treatment policy.\n"
+        "Return exactly ONE minified JSON object and nothing else (no prose, no markdown).\n"
+        'Schema: {"type":"noop|start|add|stop|switch|dose_adjust",'
+        '"drug":"metformin|glp1|sglt2|dpp4|sulfonylurea|insulin",'
+        '"dose":0.0-1.0,"lifestyle":0.0-1.0,"from_drug":"...","to_drug":"..."}\n'
+        "Rules: switch requires from_drug+to_drug+dose; noop only needs type.\n"
         f"week: {obs['week']}\n"
         f"hba1c: {float(obs['hba1c']):.2f}\n"
         f"fasting_glucose: {float(obs['fasting_glucose']):.0f}\n"
         f"bmi: {float(obs['bmi']):.1f}\n"
         f"egfr: {float(obs['egfr']):.0f}\n"
         f"ckd: {obs['ckd']} cvd: {obs['cvd']}\n"
-        "Allowed drugs: metformin, glp1, sglt2, dpp4, sulfonylurea, insulin.\n"
         'Examples: {"type":"start","drug":"metformin","dose":1.0,"lifestyle":0.7} '
-        '{"type":"add","drug":"glp1","dose":1.0}\n'
-        "Now output JSON:"
+        '{"type":"add","drug":"glp1","dose":0.8} {"type":"noop"}\n'
+        "Output JSON now:"
     )
 
 

@@ -12,11 +12,17 @@ Stronger run for judges (GPU recommended), same as --judge-preset:
 
 After training, stage plots + JSON for commit (from repo root):
   python scripts/train_reinforce_twin.py --judge-preset --git-stage-artifacts
+
+Large HF model on Colab (same schedule, your model id + 4-bit; HF token if gated):
+  python scripts/train_reinforce_twin.py --judge-schedule --load-in-4bit \\
+    --model unsloth/Meta-Llama-3.1-8B-Instruct-unsloth-bnb-4bit \\
+    --out-json logs/training_last_8b.json
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -43,6 +49,15 @@ def _device() -> str:
     import torch
 
     return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _apply_judge_schedule_hyperparams(args: argparse.Namespace) -> None:
+    """Longer run: meaningful curves + stable baselines (does not set model name)."""
+    args.updates = 120
+    args.episodes_per_update = 4
+    args.eval_seeds = 32
+    args.random_eval_episodes = 80
+    args.eval_every = 6
 
 
 def _git_root(start: Path) -> Optional[Path]:
@@ -154,6 +169,8 @@ def _plot_results(payload: Dict[str, Any], fig_dir: Path) -> None:
 
 
 def main() -> None:
+    # Keep Colab logs cleaner: we don't use TensorFlow in this script.
+    os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -181,6 +198,21 @@ def main() -> None:
         help="Longer run for demos: distilgpt2, 120 updates, richer eval (do not combine with --quick)",
     )
     p.add_argument(
+        "--judge-schedule",
+        action="store_true",
+        help="Same long schedule as judge preset but keeps your --model (for 8B / Unsloth / etc.)",
+    )
+    p.add_argument(
+        "--load-in-4bit",
+        action="store_true",
+        help="Load LM in 4-bit (bitsandbytes); needs CUDA. Use for 7B/8B on single-GPU Colab.",
+    )
+    p.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help="Pass trust_remote_code=True to from_pretrained (some checkpoints need it)",
+    )
+    p.add_argument(
         "--git-stage-artifacts",
         action="store_true",
         help="After saving JSON and PNGs, run `git add` on those paths (git repo root auto-detected)",
@@ -189,13 +221,15 @@ def main() -> None:
 
     if args.quick and args.judge_preset:
         p.error("--quick and --judge-preset are mutually exclusive")
+    if args.quick and args.judge_schedule:
+        p.error("--quick and --judge-schedule are mutually exclusive")
+    if args.judge_preset and args.judge_schedule:
+        p.error("--judge-preset and --judge-schedule are mutually exclusive")
     if args.judge_preset:
         args.model = "distilgpt2"
-        args.updates = 120
-        args.episodes_per_update = 4
-        args.eval_seeds = 32
-        args.random_eval_episodes = 80
-        args.eval_every = 6
+        _apply_judge_schedule_hyperparams(args)
+    elif args.judge_schedule:
+        _apply_judge_schedule_hyperparams(args)
 
     if args.quick:
         # Small public model so CPU smoke runs finish in minutes, not hours.
@@ -209,16 +243,45 @@ def main() -> None:
         args.max_steps = 16
 
     device_s = _device()
-    device = torch.device(device_s)
     eval_seed_list = [args.eval_seed_base + i for i in range(args.eval_seeds)]
 
     print("device:", device_s)
     print("loading model:", args.model)
-    tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=True)
+    if args.load_in_4bit and device_s != "cuda":
+        p.error("--load-in-4bit requires a CUDA GPU")
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model,
+        use_fast=True,
+        trust_remote_code=args.trust_remote_code,
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(args.model)
-    model.to(device)
+
+    if args.load_in_4bit:
+        from transformers import BitsAndBytesConfig
+
+        bnb = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model,
+            quantization_config=bnb,
+            device_map="auto",
+            trust_remote_code=args.trust_remote_code,
+        )
+        device = torch.device(next(model.parameters()).device)
+    else:
+        device = torch.device(device_s)
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model,
+            trust_remote_code=args.trust_remote_code,
+        )
+        model.to(device)
+
     model.train()
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
@@ -316,6 +379,7 @@ def main() -> None:
             "eval_seed_base": args.eval_seed_base,
             "eval_seed_count": len(eval_seed_list),
             "device": device_s,
+            "load_in_4bit": bool(args.load_in_4bit),
         },
         "baseline_random": {
             "avg_return": float(random_summary["avg_return"]),
