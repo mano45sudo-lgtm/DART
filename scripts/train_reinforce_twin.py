@@ -7,16 +7,20 @@ Requires: pip install -r requirements_hackathon.txt  (or at least torch + transf
 Example (CPU demo, ~few minutes):
   python scripts/train_reinforce_twin.py --quick
 
-Stronger run for judges (GPU recommended):
-  python scripts/train_reinforce_twin.py --updates 120 --episodes-per-update 4 --eval-seeds 32
+Stronger run for judges (GPU recommended), same as --judge-preset:
+  python scripts/train_reinforce_twin.py --judge-preset
+
+After training, stage plots + JSON for commit (from repo root):
+  python scripts/train_reinforce_twin.py --judge-preset --git-stage-artifacts
 """
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,6 +45,30 @@ def _device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
+def _git_root(start: Path) -> Optional[Path]:
+    for p in [start, *start.parents]:
+        if (p / ".git").is_dir() or (p / ".git").is_file():
+            return p
+    return None
+
+
+def _git_stage_paths(paths: List[Path], *, cwd: Path) -> None:
+    rel = []
+    for f in paths:
+        try:
+            rel.append(str(f.resolve().relative_to(cwd.resolve())))
+        except ValueError:
+            print("git stage skip (outside repo):", f)
+            return
+    try:
+        subprocess.run(["git", "add", "--", *rel], cwd=str(cwd), check=True)
+        print("git staged:", rel)
+    except FileNotFoundError:
+        print("git not found; skipped --git-stage-artifacts")
+    except subprocess.CalledProcessError as e:
+        print("git add failed (not a git checkout?):", e)
+
+
 def _plot_results(payload: Dict[str, Any], fig_dir: Path) -> None:
     plt.switch_backend("Agg")
     fig_dir.mkdir(parents=True, exist_ok=True)
@@ -56,8 +84,16 @@ def _plot_results(payload: Dict[str, Any], fig_dir: Path) -> None:
     bu_m = bu.get("mean_return")
     bu_s = bu.get("std_return", 0.0)
 
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    ax.plot(updates, train_ret, color="#2563eb", alpha=0.85, linewidth=1.8, label="Training batch mean episode return")
+    n_ep = payload["protocol"].get("episodes_per_update", 1)
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(
+        updates,
+        train_ret,
+        color="#2563eb",
+        alpha=0.85,
+        linewidth=1.8,
+        label=f"Train: mean return / update ({n_ep} env episode(s) per update)",
+    )
     ax.axhline(br, color="#64748b", linestyle="--", linewidth=1.5, label=f"Random policy mean return ({br:.2f})")
     ax.fill_between(
         updates,
@@ -65,7 +101,7 @@ def _plot_results(payload: Dict[str, Any], fig_dir: Path) -> None:
         br + br_std,
         color="#64748b",
         alpha=0.12,
-        label="Random ±1 std (eval episodes)",
+        label="Random ±1 std (baseline eval)",
     )
     if bu_m is not None:
         ax.axhline(bu_m, color="#94a3b8", linestyle=":", linewidth=1.4, label=f"Untrained LM mean return ({bu_m:.2f})")
@@ -81,11 +117,11 @@ def _plot_results(payload: Dict[str, Any], fig_dir: Path) -> None:
         capsize=3,
         markersize=5,
         linewidth=1.4,
-        label="Held-out eval: LM mean ± std",
+        label="Held-out eval: trained LM mean ± std",
     )
-    ax.set_xlabel("Training update (batch of rollouts on the twin env)")
-    ax.set_ylabel("Total reward per episode (sum of weekly step rewards)")
-    ax.set_title("REINFORCE on digital twin: random baseline vs learning curve")
+    ax.set_xlabel("REINFORCE update index (each update = on-policy rollouts in DigitalTwinDiabetesEnv)")
+    ax.set_ylabel("Episode return (dimensionless; sum of env step rewards per episode)")
+    ax.set_title("End-to-end training on the twin: baselines vs learning curve")
     ax.grid(True, alpha=0.35)
     ax.legend(loc="lower right", fontsize=8)
     fig.tight_layout()
@@ -99,15 +135,17 @@ def _plot_results(payload: Dict[str, Any], fig_dir: Path) -> None:
     fl = payload["final_eval"]["llm"]["mean_return"]
     fls = payload["final_eval"]["llm"]["std_return"]
     fig2, ax2 = plt.subplots(figsize=(5, 4))
-    labels = ["Random\n(untrained)", "LM after\nREINFORCE"]
+    n_eval = int(payload["final_eval"]["llm"]["eval_episodes"])
+    labels = ["Random policy\n(baseline)", "Causal LM\nafter REINFORCE"]
     means = [fr, fl]
     stds = [frs, fls]
     colors = ["#64748b", "#ea580c"]
     x = np.arange(len(labels))
     ax2.bar(x, means, yerr=stds, capsize=6, color=colors, edgecolor="white", linewidth=0.8, alpha=0.9)
     ax2.set_xticks(x, labels)
-    ax2.set_ylabel("Mean episode return (same eval seeds)")
-    ax2.set_title("Post-training evaluation on held-out seeds")
+    ax2.set_xlabel("Agent (evaluated in the same DigitalTwinDiabetesEnv)")
+    ax2.set_ylabel(f"Mean episode return ± std (held-out seeds, N={n_eval})")
+    ax2.set_title("Final quantitative comparison (no training data leakage)")
     ax2.grid(True, axis="y", alpha=0.35)
     fig2.tight_layout()
     p2 = fig_dir / "final_random_vs_trained.png"
@@ -137,7 +175,27 @@ def main() -> None:
     p.add_argument("--fig-dir", type=Path, default=repo_root / "docs" / "figures")
     p.add_argument("--save-model", type=Path, default=None, help="Optional path to save final model dir")
     p.add_argument("--quick", action="store_true", help="Short run for smoke tests")
+    p.add_argument(
+        "--judge-preset",
+        action="store_true",
+        help="Longer run for demos: distilgpt2, 120 updates, richer eval (do not combine with --quick)",
+    )
+    p.add_argument(
+        "--git-stage-artifacts",
+        action="store_true",
+        help="After saving JSON and PNGs, run `git add` on those paths (git repo root auto-detected)",
+    )
     args = p.parse_args()
+
+    if args.quick and args.judge_preset:
+        p.error("--quick and --judge-preset are mutually exclusive")
+    if args.judge_preset:
+        args.model = "distilgpt2"
+        args.updates = 120
+        args.episodes_per_update = 4
+        args.eval_seeds = 32
+        args.random_eval_episodes = 80
+        args.eval_every = 6
 
     if args.quick:
         # Small public model so CPU smoke runs finish in minutes, not hours.
@@ -250,7 +308,7 @@ def main() -> None:
             "model": args.model,
             "max_steps_per_episode": args.max_steps,
             "updates": args.updates,
-            "episodes_per_update": args.episodes_per_update,
+            "episodes_per_update": int(args.episodes_per_update),
             "lr": args.lr,
             "max_new_tokens": args.max_new_tokens,
             "temperature": args.temperature,
@@ -301,7 +359,16 @@ def main() -> None:
     print("wrote", out_json)
 
     _plot_results(payload, args.fig_dir)
+    p1 = args.fig_dir / "training_vs_baselines.png"
+    p2 = args.fig_dir / "final_random_vs_trained.png"
     print("wrote plots to", args.fig_dir)
+
+    if args.git_stage_artifacts:
+        root = _git_root(repo_root)
+        if root:
+            _git_stage_paths([out_json, p1, p2], cwd=root)
+        else:
+            print("--git-stage-artifacts: no .git found above", repo_root)
 
     if args.save_model:
         args.save_model.mkdir(parents=True, exist_ok=True)

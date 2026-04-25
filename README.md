@@ -50,26 +50,59 @@ Implemented in `reward/rubric.py`:
 - **Cost**: weekly cost penalty
 - **Terminal**: remission bonus / failure penalty
 
-## 4) Results (baseline vs trained)
+## 4) End-to-end training (env rollouts, not a static dataset)
 
-### Baseline (random agent)
-Generated with:
-```powershell
-python scripts/run_evaluation.py
-python scripts/plot_rewards.py
+The training loop lives in `scripts/train_reinforce_twin.py`. Each REINFORCE update calls `rollout_episode` → `DigitalTwinDiabetesEnv.reset` / `step` with a live LM policy, so gradients come from **on-policy trajectories in the simulator**, not from a fixed offline dataset. Baselines are a **random policy** (and an **untrained LM** line on the learning-curve figure) evaluated on the same env.
+
+**Two run modes**
+
+| Mode | Command | Role |
+|------|---------|------|
+| Smoke (fast CPU check) | `python scripts/train_reinforce_twin.py --quick` | CI / layout verification; uses `sshleifer/tiny-gpt2` (may not parse valid JSON actions). |
+| Judge / demo (meaningful length) | `python scripts/train_reinforce_twin.py --judge-preset` | **Recommended for reviewers:** `distilgpt2`, 120 updates, 4 episodes/update, 32 held-out eval seeds, 80 random baseline episodes. Use a GPU if you can. |
+
+After any run, **re-commit** `logs/training_last.json` and the two PNGs under `docs/figures/` so judges see your latest numbers and plots. Optional one-liner to **stage** those paths for `git commit` (run from a git checkout):
+
+```bash
+python scripts/train_reinforce_twin.py --judge-preset --git-stage-artifacts
 ```
 
-Plot (committed):
-- `logs/baseline_returns.png` — episode return vs episode (random agent)
+Figures are written as **high-resolution PNG** (160 DPI) with **labeled axes** (update index; episode return in the env’s reward units).
 
-### Trained (Colab REINFORCE on env rollouts)
-Notebook:
-- `training/train_trl_colab.ipynb`
+### Plots (committed in-repo)
 
-Generated artifacts (commit these):
-- `logs/training_last.json` — full protocol + baseline/trained metrics
-- `docs/figures/training_vs_baselines.png` — training curve + baseline bands on same axes
-- `docs/figures/final_random_vs_trained.png` — final held-out comparison with error bars
+**Learning curve + baselines** (`docs/figures/training_vs_baselines.png`):
+
+![Training curve vs random and untrained LM baselines](docs/figures/training_vs_baselines.png)
+
+**Final bar comparison** (held-out seeds; `docs/figures/final_random_vs_trained.png`):
+
+![Final eval random vs trained LM](docs/figures/final_random_vs_trained.png)
+
+**Random baseline only** (`logs/baseline_returns.png` from `scripts/plot_rewards.py`):
+
+![Random agent returns per episode](logs/baseline_returns.png)
+
+### Latest logged metrics (from committed `logs/training_last.json`)
+
+These numbers update whenever you re-run training and overwrite the JSON. *Current commit (smoke `--quick` run):*
+
+| Metric | Random baseline | Untrained LM (eval@0) | Trained LM (final held-out) |
+|--------|-----------------|------------------------|-----------------------------|
+| Mean episode return | 6.45 (std 30.81, *n*=20 eval episodes) | −24.85 (std 21.81, *n*=8) | −24.85 (std 21.81, *n*=8) |
+| JSON action parse rate | — | 0.00 | 0.00 |
+
+The smoke model does not emit parseable tool JSON reliably; **run `--judge-preset` with `distilgpt2`**, then refresh this table from the new `training_last.json` before submission.
+
+### Notebook (Colab)
+
+- `training/train_trl_colab.ipynb` — installs deps, runs smoke or judge training, displays the same PNGs.
+
+### Weights & Biases (optional)
+
+If you log a run to Wandb, add the **direct URL to that run** here (plots may still be mirrored in-repo as above):
+
+- `<ADD_WANDB_RUN_URL_HERE>`
 
 ## 5) Reproduce locally (Windows PowerShell)
 
@@ -123,9 +156,10 @@ Colab steps:
 3. Set `REPO_ROOT` in the notebook (e.g., `/content/mano/DART`).
 4. Run the quick smoke cell once:
    - `python scripts/train_reinforce_twin.py --quick`
-5. Run the judge-ready command (GPU recommended):
-   - `python scripts/train_reinforce_twin.py --updates 120 --episodes-per-update 4 --eval-seeds 32 --random-eval-episodes 80 --model distilgpt2`
-6. Commit these generated artifacts:
+5. For submission-quality curves, run the **judge preset** (GPU recommended); equivalent to the long manual flags:
+   - `python scripts/train_reinforce_twin.py --judge-preset`
+   - Optional: `python scripts/train_reinforce_twin.py --judge-preset --git-stage-artifacts` then `git commit` from the repo root.
+6. **Commit** these paths so reviewers see plots and numbers in GitHub (not only inside Colab):
    - `logs/training_last.json`
    - `docs/figures/training_vs_baselines.png`
    - `docs/figures/final_random_vs_trained.png`

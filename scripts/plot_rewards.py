@@ -40,12 +40,12 @@ def main():
     agent = RandomAgent(seed=0)
     rets = rollout(agent, episodes=60, seed=0)
 
-    plt.figure(figsize=(8, 3))
-    plt.plot(rets, alpha=0.6)
-    plt.title("Baseline returns (random agent)")
-    plt.xlabel("episode")
-    plt.ylabel("return")
-    plt.grid(True)
+    plt.figure(figsize=(9, 3.5))
+    plt.plot(np.arange(1, len(rets) + 1), rets, alpha=0.75, linewidth=1.0, color="#64748b")
+    plt.title("Random baseline: episode returns (DigitalTwinDiabetesEnv rollouts)")
+    plt.xlabel("Episode index (sequential rollouts, 1 … N)")
+    plt.ylabel("Episode return (sum of weekly step rewards; same units as training plots)")
+    plt.grid(True, alpha=0.35)
     png = out_dir / "baseline_returns.png"
     plt.tight_layout()
     plt.savefig(png, dpi=150)
