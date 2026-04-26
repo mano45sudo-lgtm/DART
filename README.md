@@ -1,5 +1,7 @@
 ---
-title: "DART — Digital Twin Medicine"
+
+## title: "DART — Digital Twin Medicine"
+
 emoji: 🧬
 colorFrom: purple
 colorTo: blue
@@ -8,23 +10,19 @@ sdk_version: "1.56.0"
 app_file: app.py
 pinned: false
 tags:
-  - openenv
-  - World modeling
-  - digital-twin
-  - healthcare
-  - personalized-medicine
+
+- openenv
+- World modeling
+- digital-twin
+- healthcare
+- personalized-medicine
 short_description: "Personalized T2DM RL agent in a stochastic digital twin"
----
 
 # 🧬 DART — Digital Twin Medicine
 
 > *An RL agent that learns personalized T2DM treatment policies inside a stochastic digital twin — prescribing to* ***individuals***, *not populations.*
 
-<div align="center">
-
-<a href="https://opensource.org/licenses/MIT" target="_blank"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"/></a>   <a href="https://github.com/meta-pytorch/OpenEnv" target="_blank"><img src="https://img.shields.io/badge/OpenEnv-compliant-green" alt="OpenEnv"/></a>   <a href="https://huggingface.co/spaces/mano678/DART_1" target="_blank"><img src="https://img.shields.io/badge/🤗%20HuggingFace-Space-yellow" alt="HuggingFace Space"/></a>   <a href="https://colab.research.google.com/github/mano45sudo-lgtm/DART/blob/main/training/DART_Colab_submission.ipynb" target="_blank"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
-
-</div>
+         
 
 ---
 
@@ -33,13 +31,13 @@ short_description: "Personalized T2DM RL agent in a stochastic digital twin"
 > All links open in a new tab — you won't lose your place in this README.
 
 
-| Resource                                  | Link                                                                                                                                                                   |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🤗 **UI — Streamlit Space**               | <a href="https://huggingface.co/spaces/mano678/DART_1" target="_blank">huggingface.co/spaces/mano678/DART_1</a>                                                        |
-| 🌐 **OpenEnv Environment Server**         | <a href="https://mano678-dart-1.hf.space" target="_blank">mano678-dart-1.hf.space</a>                                                                                  |
-| 📓 **Submission Colab (single notebook)** | <a href="https://colab.research.google.com/github/mano45sudo-lgtm/DART/blob/main/training/DART_Colab_submission.ipynb" target="_blank">DART_Colab_submission.ipynb</a> |
-| 💻 **GitHub Repository**                  | <a href="https://github.com/mano45sudo-lgtm/DART" target="_blank">github.com/mano45sudo-lgtm/DART</a>                                                                  |
-| 📝 **Mini-blog / Demo video**             | <a href="https://ADD_BLOG_OR_VIDEO_URL_HERE" target="_blank">ADD_BLOG_OR_VIDEO_URL_HERE</a>                                                                            |
+| Resource                                  | Link                                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🤗 **UI — Streamlit Space**               | [huggingface.co/spaces/mano678/DART_1](https://huggingface.co/spaces/mano678/DART_1)                                                        |
+| 🌐 **OpenEnv Environment Server**         | [mano678-dart-1.hf.space](https://mano678-dart-1.hf.space)                                                                                  |
+| 📓 **Submission Colab (single notebook)** | [DART_Colab_submission.ipynb](https://colab.research.google.com/github/mano45sudo-lgtm/DART/blob/main/training/DART_Colab_submission.ipynb) |
+| 💻 **GitHub Repository**                  | [github.com/mano45sudo-lgtm/DART](https://github.com/mano45sudo-lgtm/DART)                                                                  |
+| 📝 **Mini-blog / Demo video**             | [Blog Video Link](https://youtu.be/u8xIbkWZ0d4)                                                                                  |
 
 
 ---
@@ -342,101 +340,81 @@ python scripts/generate_readme_demo_figures.py
 
 ### Training curve
 
-
-
 Smoothed per-episode return across `random`, `distilgpt2`, optional `llama-8b-4bit`, and council. The trained agent improves consistently over the random baseline across the update schedule.
 
-![Training curve — smoothed episode return by policy](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/training_curve.png)
+Training curve — smoothed episode return by policy
 
 ---
 
 ### Behavior — glucose trajectories
 
-
-
 Random vs trained fasting glucose trajectories over simulated weeks (same logs as the publication Colab / `scripts/generate_readme_demo_figures.py`).
 
-![Behavior — glucose trajectories](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/behavior_glucose.png)
+Behavior — glucose trajectories
 
 ---
 
 ### Final comparison — tail mean ± std
 
-
-
 Mean return over the last `bar_tail_episodes` episodes per model with standard deviation error bars. Values are computed directly from `colab_experiment.json`.
 
-![Final comparison — tail mean ± std across policies](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/final_comparison_bars.png)
+Final comparison — tail mean ± std across policies
 
 ---
 
 ### Clinical state — same virtual patient, different policies
 
-
-
 FPG, HbA1c, eGFR, and weekly cost across simulated weeks for matched random vs trained traces. The `judge_trace_env_seed` ensures an identical virtual patient across policies — isolating the effect of the policy itself.
 
-![Clinical state — matched random vs trained traces](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_clinical_state.png)
+Clinical state — matched random vs trained traces
 
 ---
 
 ### Reward rubric — what actually changed
 
-
-
 Stacked component sums per policy. The trained agent's gains are concentrated in `glucose_improvement` and `hypoglycemia_penalty`. Cost and instability terms show less movement — a concrete, specific finding for the next training iteration.
 
-![Reward rubric — stacked component totals by policy](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_rubric_episode_totals.png)
+Reward rubric — stacked component totals by policy
 
 ---
 
 ### Outcome distributions — N seeds, many virtual patients
 
-
-
 Boxplots of final HbA1c, final FPG, and episode return across `judge_endpoint_episodes` independent seeds per model. The trained policy must generalise across patient variation — not just perform on one seed.
 
-![Outcome distributions — final labs and return across seeds](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_outcome_distributions.png)
+Outcome distributions — final labs and return across seeds
 
 ---
 
 ### Action mix
 
-
-
 Action type counts per policy during the traced episode. The random policy distributes uniformly. The trained policy develops preferences — a qualitative signal of learned clinical strategy.
 
-![Action mix — action type counts per policy](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_action_mix.png)
+Action mix — action type counts per policy
 
 ---
 
 ### Self-repair episodes
 
-
-
 Council episode return with dashed vertical lines at `self_repair_episodes` — moments where the agent corrected its trajectory following a safety intervention or exploration signal.
 
-![Self-repair episodes — council return with repair markers](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/self_repair_episodes.png)
+Self-repair episodes — council return with repair markers
 
 ---
 
 ### Judge — step reward and cumulative return
 
-
-
 Per-step reward and cumulative return for the traced episode used in the judge panels.
 
-![Judge — step reward and cumulative return](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_step_and_cumulative_return.png)
+Judge — step reward and cumulative return
 
 ---
 
 ### Council — glucose example trace
 
-
-
 Glucose dynamics for the council self-repair trace window (example episode).
 
-![Council — glucose example trace](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_council_glucose_example.png)
+Council — glucose example trace
 
 ---
 
@@ -496,11 +474,11 @@ git --version
 
 **3. For Docker-based OpenEnv server (optional):**
 
-Download <a href="https://docs.docker.com/get-docker/" target="_blank">Docker Desktop</a> and ensure the engine is running before using any Docker commands.
+Download [Docker Desktop](https://docs.docker.com/get-docker/) and ensure the engine is running before using any Docker commands.
 
 **4. HuggingFace account (for gated LLMs):**
 
-Sign up at <a href="https://huggingface.co" target="_blank">huggingface.co</a>. Required only when running the 8B model. For smoke tests and distilgpt2, no account is needed.
+Sign up at [huggingface.co](https://huggingface.co). Required only when running the 8B model. For smoke tests and distilgpt2, no account is needed.
 
 ---
 
@@ -778,10 +756,6 @@ DART/
 
 ---
 
-<div align="center">
-
 *Built for OpenEnv Hackathon 2026 · Track #3.1 — World Modeling (Professional Tasks)*
 
 *PRs and forks welcome.*
-
-</div>
