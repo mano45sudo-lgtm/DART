@@ -18,6 +18,14 @@ repo_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(repo_root))
 
 
+def _savefig_multi(fig, path: Path, *, dpi: int, also_svg: bool) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=dpi)
+    if also_svg:
+        fig.savefig(path.with_suffix(".svg"), format="svg")
+
+
 def _ma(x: Sequence[float], window: int) -> np.ndarray:
     a = np.array(x, dtype=float)
     if a.size < window or window < 1:
@@ -70,7 +78,13 @@ def main() -> None:
     p.add_argument("--out-dir", type=Path, default=repo_root / "docs" / "figures")
     p.add_argument("--ma-window", type=int, default=5)
     p.add_argument("--dpi", type=int, default=150)
+    p.add_argument(
+        "--also-svg",
+        action="store_true",
+        help="Also write .svg (text) next to .png; safe for git push to Hugging Face.",
+    )
     args = p.parse_args()
+    also_svg: bool = bool(args.also_svg)
     d = json.loads(args.in_json.read_text(encoding="utf-8"))
     rows: List[Dict[str, Any]] = list(d.get("episodes", []))
     ma_use = int(d.get("ma_window", args.ma_window))
@@ -90,7 +104,7 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(7.0, 4.0))
     plot_training_curves(ax, groups, order, ma_use, label_map=label_map)
     fig.tight_layout()
-    fig.savefig(p1, dpi=args.dpi)
+    _savefig_multi(fig, p1, dpi=args.dpi, also_svg=also_svg)
     plt.close(fig)
 
     # Bar: mean and std of reward in last K episodes per model
@@ -117,7 +131,7 @@ def main() -> None:
     ax2.grid(True, axis="y", alpha=0.35)
     fig2.tight_layout()
     p2 = args.out_dir / "final_comparison_bars.png"
-    fig2.savefig(p2, dpi=args.dpi)
+    _savefig_multi(fig2, p2, dpi=args.dpi, also_svg=also_svg)
     plt.close(fig2)
 
     # Glucose behavior
@@ -135,7 +149,7 @@ def main() -> None:
         ax3.grid(True, alpha=0.35)
         ax3.legend(loc="best", fontsize=8)
         fig3.tight_layout()
-        fig3.savefig(p3, dpi=args.dpi)
+        _savefig_multi(fig3, p3, dpi=args.dpi, also_svg=also_svg)
         plt.close(fig3)
     else:
         p3 = None
@@ -159,7 +173,7 @@ def main() -> None:
         ax4.grid(True, alpha=0.35)
         ax4.legend(loc="best", fontsize=8)
         fig4.tight_layout()
-        fig4.savefig(p4, dpi=args.dpi)
+        _savefig_multi(fig4, p4, dpi=args.dpi, also_svg=also_svg)
         plt.close(fig4)
     else:
         p4 = None

@@ -20,6 +20,14 @@ repo_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(repo_root))
 
 
+def _savefig_multi(fig, path: Path, *, dpi: int, also_svg: bool) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=dpi)
+    if also_svg:
+        fig.savefig(path.with_suffix(".svg"), format="svg")
+
+
 def _weeks_for_steps(trace: Dict[str, Any]) -> Optional[np.ndarray]:
     w = trace.get("week", [])
     if not w or len(w) < 2:
@@ -224,7 +232,13 @@ def main() -> None:
     p.add_argument("--in-json", type=Path, default=repo_root / "logs" / "colab_experiment.json")
     p.add_argument("--out-dir", type=Path, default=repo_root / "docs" / "figures")
     p.add_argument("--dpi", type=int, default=150)
+    p.add_argument(
+        "--also-svg",
+        action="store_true",
+        help="Also write .svg next to .png (git-friendly for Hugging Face remote).",
+    )
     args = p.parse_args()
+    also_svg: bool = bool(args.also_svg)
     d = json.loads(args.in_json.read_text(encoding="utf-8"))
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -247,7 +261,7 @@ def main() -> None:
         fig.suptitle("Partial observability + stochastic twin: key vitals and treatment cost (one ep / policy where logged)")
         fig.tight_layout()
         p0 = args.out_dir / "judge_clinical_state.png"
-        fig.savefig(p0, dpi=args.dpi)
+        _savefig_multi(fig, p0, dpi=args.dpi, also_svg=also_svg)
         plt.close(fig)
         written.append(p0)
 
@@ -256,7 +270,7 @@ def main() -> None:
         fig.suptitle("How the rubric accrues over simulated weeks (example trajectories)")
         fig.tight_layout()
         p1 = args.out_dir / "judge_step_and_cumulative_return.png"
-        fig.savefig(p1, dpi=args.dpi)
+        _savefig_multi(fig, p1, dpi=args.dpi, also_svg=also_svg)
         plt.close(fig)
         written.append(p1)
 
@@ -281,7 +295,7 @@ def main() -> None:
             ax.grid(True, axis="y", alpha=0.35)
             fig.tight_layout()
             p2 = args.out_dir / "judge_action_mix.png"
-            fig.savefig(p2, dpi=args.dpi)
+            _savefig_multi(fig, p2, dpi=args.dpi, also_svg=also_svg)
             plt.close(fig)
             written.append(p2)
 
@@ -290,7 +304,7 @@ def main() -> None:
             _plot_rubric_sums(ax, traces, trace_order, label_map)
             fig.tight_layout()
             p3 = args.out_dir / "judge_rubric_episode_totals.png"
-            fig.savefig(p3, dpi=args.dpi)
+            _savefig_multi(fig, p3, dpi=args.dpi, also_svg=also_svg)
             plt.close(fig)
             written.append(p3)
 
@@ -302,7 +316,7 @@ def main() -> None:
         fig.suptitle("Stochasticity across episodes (same max_steps, different patient seeds per episode)")
         fig.tight_layout()
         p4 = args.out_dir / "judge_outcome_distributions.png"
-        fig.savefig(p4, dpi=args.dpi)
+        _savefig_multi(fig, p4, dpi=args.dpi, also_svg=also_svg)
         plt.close(fig)
         written.append(p4)
 
@@ -323,7 +337,7 @@ def main() -> None:
             ax.legend(loc="best", fontsize=7)
             fig.tight_layout()
             p5 = args.out_dir / "judge_council_glucose_example.png"
-            fig.savefig(p5, dpi=args.dpi)
+            _savefig_multi(fig, p5, dpi=args.dpi, also_svg=also_svg)
             plt.close(fig)
             written.append(p5)
 

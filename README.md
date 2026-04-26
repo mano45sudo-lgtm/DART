@@ -132,13 +132,15 @@ This is the **default submission Colab** (full training + all figures + judge da
 - `scripts/plot_colab_publication.py` — aggregate training / bars / glucose / council.
 - `scripts/plot_colab_judge_insights.py` — judge-focused panels (see §5).
 
-To **recompute figures** from an existing JSON (after download):
+To **recompute figures** from an existing JSON (after download from Colab):
 
 ```bash
 cd DART
-python scripts/plot_colab_publication.py --in-json logs/colab_experiment.json --out-dir docs/figures
-python scripts/plot_colab_judge_insights.py --in-json logs/colab_experiment.json --out-dir docs/figures
+python scripts/plot_colab_publication.py --in-json logs/colab_experiment.json --out-dir docs/figures --also-svg
+python scripts/plot_colab_judge_insights.py --in-json logs/colab_experiment.json --out-dir docs/figures --also-svg
 ```
+
+`--also-svg` writes **vector** copies (`*.svg`) used for some remotes; PNGs are what the README hot-links below.
 
 **Quick demo (no GPU, no HF model):** regenerate committed README charts and `logs/colab_experiment.json`:
 
@@ -146,11 +148,27 @@ python scripts/plot_colab_judge_insights.py --in-json logs/colab_experiment.json
 python scripts/generate_readme_demo_figures.py
 ```
 
+### After a **successful Colab** — put key images on **GitHub** and **Hugging Face**
+
+1. **Download** `logs/colab_experiment.json` from Colab into your clone’s `DART/logs/` (replace the file).
+2. Re-run the two `plot_colab_*.py` commands **with `--also-svg`** (above), or re-run the notebook (it now passes `--also-svg`).
+3. **GitHub:** `git add docs/figures logs/colab_experiment.json && git commit -m "results: colab experiment figures" && git push origin main`
+4. **Hugging Face Space (same PNGs, no binary `git push` to Hub):** use the Hub API uploader (needs a token with write access to the Space):
+   ```bash
+   export HF_TOKEN=hf_...   # your token
+   python scripts/upload_figures_to_hf_space.py --repo mano678/DART_1
+   ```
+   That places files under `docs/figures/` in the **Space** repo. Example direct link after upload:  
+   `https://huggingface.co/spaces/mano678/DART_1/resolve/main/docs/figures/training_curve.png`  
+   (Replace `mano678/DART_1` if your Space id differs.)  
+   *Alternatively*, keep **Space → Settings → Deploy from GitHub** so the Space tracks `mano45sudo-lgtm/DART` `main`; then PNGs on GitHub are enough for the app + README, and the uploader is optional.
+5. File checklist: `docs/figures/KEY_IMAGES.md` lists every expected filename.
+
 ---
 
 ## 5 · Results — figures and metrics from the submission Colab
 
-The images below use **absolute links** to the files on your **default branch** (works on GitHub, HF, and forks). The demo was produced by `python scripts/generate_readme_demo_figures.py` — override by running **`DART_Colab_submission.ipynb**` and re-running the `plot_colab_*.py` steps, then commit.
+The images below use **absolute links** to the files on your **default branch** (works on GitHub, HF, and forks). Replace with your run by following **“After a successful Colab”** above, then hard-refresh the README. Demo fallbacks: `python scripts/generate_readme_demo_figures.py`.
 
 ### 5.1 — Publication / training (script: `plot_colab_publication.py`)
 

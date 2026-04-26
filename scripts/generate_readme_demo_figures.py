@@ -134,6 +134,7 @@ def main() -> None:
             str(repo_root / "docs" / "figures"),
             "--ma-window",
             str(MA),
+            "--also-svg",
         ],
         [
             sys.executable,
@@ -142,6 +143,7 @@ def main() -> None:
             str(out_path),
             "--out-dir",
             str(repo_root / "docs" / "figures"),
+            "--also-svg",
         ],
     ):
         subprocess.run(cmd, cwd=repo_root, check=True)
