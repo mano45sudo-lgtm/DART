@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import os
 import sys
+from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 
@@ -101,6 +102,285 @@ def collect_trained_episode_glucose(
             g.append(float(obs["fasting_glucose"]))
             done = bool(term or trunc)
     return g
+
+
+def _empty_clinical_trace() -> Dict[str, Any]:
+    return {
+        "week": [],
+        "fasting_glucose": [],
+        "hba1c": [],
+        "egfr": [],
+        "bmi": [],
+        "systolic_bp": [],
+        "step_reward": [],
+        "cumulative_return": [],
+        "action_type": [],
+        "reward_components": [],
+        "weekly_cost_usd": [],
+        "n_side_effects": [],
+    }
+
+
+def _append_initial_observation(trace: Dict[str, Any], obs: Dict[str, Any]) -> None:
+    trace["week"].append(int(obs["week"]))
+    trace["fasting_glucose"].append(float(obs["fasting_glucose"]))
+    trace["hba1c"].append(float(obs["hba1c"]))
+    trace["egfr"].append(float(obs["egfr"]))
+    trace["bmi"].append(float(obs["bmi"]))
+    trace["systolic_bp"].append(float(obs["systolic_bp"]))
+    trace["weekly_cost_usd"].append(0.0)
+    trace["n_side_effects"].append(0.0)
+
+
+def _append_post_step(
+    trace: Dict[str, Any], reward: float, info: Dict[str, Any], next_obs: Dict[str, Any], cum: float
+) -> float:
+    trace["fasting_glucose"].append(float(next_obs["fasting_glucose"]))
+    trace["hba1c"].append(float(next_obs["hba1c"]))
+    trace["egfr"].append(float(next_obs["egfr"]))
+    trace["bmi"].append(float(next_obs["bmi"]))
+    trace["systolic_bp"].append(float(next_obs["systolic_bp"]))
+    trace["week"].append(int(next_obs["week"]))
+    r = float(reward)
+    new_cum = float(cum + r)
+    trace["step_reward"].append(r)
+    trace["cumulative_return"].append(new_cum)
+    rc = info.get("reward", {}) or {}
+    if isinstance(rc, dict):
+        trace["reward_components"].append({k: float(v) for k, v in rc.items() if isinstance(v, (int, float))})
+    else:
+        trace["reward_components"].append({})
+    a = info.get("action", {}) or {}
+    trace["action_type"].append(str(a.get("type", "noop")))
+    trace["weekly_cost_usd"].append(float(info.get("weekly_cost_usd", 0.0) or 0.0))
+    se = list(info.get("side_effects") or [])
+    trace["n_side_effects"].append(float(len(se)))
+    return new_cum
+
+
+def rollout_clinical_trace(
+    policy: Callable[[Dict[str, Any]], Any],
+    *,
+    env_seed: int,
+    max_steps: int,
+) -> Dict[str, Any]:
+    """
+    One full episode: partial observations, decomposed rubric, costs, and action types.
+    `policy(obs)` must return a JSON action dict the env accepts.
+    """
+    env = DigitalTwinDiabetesEnv(seed=env_seed, max_steps=max_steps)
+    obs, _ = env.reset(seed=env_seed)
+    trace = _empty_clinical_trace()
+    _append_initial_observation(trace, obs)
+    cum = 0.0
+    done = False
+    while not done:
+        action = policy(obs)
+        obs, reward, term, trunc, info = env.step(action)
+        cum = _append_post_step(trace, reward, info, obs, cum)
+        done = bool(term or trunc)
+    return trace
+
+
+def rollout_clinical_trace_random(*, env_seed: int, max_steps: int, random_seed: int = 0) -> Dict[str, Any]:
+    agent = RandomAgent(seed=random_seed)
+    return rollout_clinical_trace(lambda o: agent.act(o), env_seed=env_seed, max_steps=max_steps)
+
+
+def rollout_clinical_trace_trained(
+    model: torch.nn.Module,
+    tokenizer: Any,
+    device: torch.device,
+    *,
+    env_seed: int,
+    max_steps: int,
+    max_new_tokens: int = 48,
+    temperature: float = 0.85,
+    top_p: float = 0.92,
+) -> Dict[str, Any]:
+    from training.llm_reinforce import obs_to_prompt, sample_action_via_generate
+
+    model.eval()
+
+    def policy(obs: Dict[str, Any]) -> Any:
+        with torch.no_grad():
+            prompt = obs_to_prompt(obs)
+            _ids, _q, _t, action, _ = sample_action_via_generate(
+                model,
+                tokenizer,
+                prompt,
+                device=device,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+            )
+        return action
+
+    return rollout_clinical_trace(policy, env_seed=env_seed, max_steps=max_steps)
+
+
+def collect_council_clinical_trace(
+    *,
+    env_seed: int,
+    max_steps: int,
+    council_seed: int = 0,
+) -> Dict[str, Any]:
+    from council import build_default_council
+    from self_improvement import SelfImprovementController
+
+    council = build_default_council(seed=council_seed)
+    ctrl = SelfImprovementController()
+    env = DigitalTwinDiabetesEnv(seed=env_seed, max_steps=max_steps)
+    obs, _ = env.reset(seed=env_seed)
+    trace = _empty_clinical_trace()
+    _append_initial_observation(trace, obs)
+    cum = 0.0
+    done = False
+    while not done:
+        ex = council.decide(
+            obs,
+            env,
+            use_fallback=bool(ctrl.use_fallback),
+            exploration=float(ctrl.exploration),
+        )
+        action = ex["final_action"]
+        obs, reward, term, trunc, info = env.step(action)
+        cum = _append_post_step(trace, reward, info, obs, cum)
+        done = bool(term or trunc)
+    return trace
+
+
+def collect_episode_endpoints(
+    policy: Callable[[Dict[str, Any]], Any],
+    *,
+    n_episodes: int,
+    max_steps: int,
+    seed: int,
+    model_key: str,
+) -> List[Dict[str, Any]]:
+    """Run N episodes; record terminal metrics for distribution / box plots."""
+    out: List[Dict[str, Any]] = []
+    for i in range(1, n_episodes + 1):
+        es = int(seed) + int(i) * 97
+        env = DigitalTwinDiabetesEnv(seed=es, max_steps=max_steps)
+        obs, _ = env.reset(seed=es)
+        ret = 0.0
+        n = 0
+        done = False
+        while not done:
+            a = policy(obs)
+            obs, r, term, trunc, _ = env.step(a)
+            ret += float(r)
+            n += 1
+            if term or trunc:
+                break
+        out.append(
+            {
+                "model": model_key,
+                "episode": i,
+                "return": float(ret),
+                "final_hba1c": float(obs["hba1c"]),
+                "final_fpg": float(obs["fasting_glucose"]),
+                "final_egfr": float(obs["egfr"]),
+                "n_steps": n,
+            }
+        )
+    return out
+
+
+def collect_endpoints_trained(
+    model: torch.nn.Module,
+    tokenizer: Any,
+    device: torch.device,
+    *,
+    n_episodes: int,
+    max_steps: int,
+    seed: int,
+    model_key: str,
+    max_new_tokens: int = 48,
+    temperature: float = 0.85,
+    top_p: float = 0.92,
+) -> List[Dict[str, Any]]:
+    from training.llm_reinforce import obs_to_prompt, sample_action_via_generate
+
+    model.eval()
+    res: List[Dict[str, Any]] = []
+    for i in range(1, n_episodes + 1):
+        es = int(seed) + int(i) * 97
+        env = DigitalTwinDiabetesEnv(seed=es, max_steps=max_steps)
+        obs, _ = env.reset(seed=es)
+        ret = 0.0
+        n = 0
+        done = False
+        with torch.no_grad():
+            while not done:
+                prompt = obs_to_prompt(obs)
+                _ids, _q, _t, action, _ = sample_action_via_generate(
+                    model,
+                    tokenizer,
+                    prompt,
+                    device=device,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_p=top_p,
+                )
+                obs, r, term, trunc, _ = env.step(action)
+                ret += float(r)
+                n += 1
+                done = bool(term or trunc)
+        res.append(
+            {
+                "model": model_key,
+                "episode": i,
+                "return": float(ret),
+                "final_hba1c": float(obs["hba1c"]),
+                "final_fpg": float(obs["fasting_glucose"]),
+                "final_egfr": float(obs["egfr"]),
+                "n_steps": n,
+            }
+        )
+    return res
+
+
+def collect_endpoints_random_baseline(
+    *,
+    n_episodes: int,
+    max_steps: int,
+    seed: int = 0,
+    model_key: str = "random",
+) -> List[Dict[str, Any]]:
+    ag = RandomAgent(seed=seed)
+    return collect_episode_endpoints(
+        lambda o: ag.act(o),
+        n_episodes=n_episodes,
+        max_steps=max_steps,
+        seed=seed,
+        model_key=model_key,
+    )
+
+
+def action_type_histogram(trace: Optional[Dict[str, Any]]) -> Dict[str, int]:
+    if not trace or not trace.get("action_type"):
+        return {}
+    c = Counter(str(t) for t in trace["action_type"])
+    return {k: int(c[k]) for k in sorted(c.keys())}
+
+
+def sum_reward_components(trace: Optional[Dict[str, Any]]) -> Dict[str, float]:
+    if not trace or not trace.get("reward_components"):
+        return {}
+    keys: set[str] = set()
+    for d in trace["reward_components"]:
+        if isinstance(d, dict):
+            keys |= set(d.keys())
+    acc: Dict[str, float] = {k: 0.0 for k in keys}
+    for d in trace["reward_components"]:
+        if not isinstance(d, dict):
+            continue
+        for k, v in d.items():
+            if isinstance(v, (int, float)):
+                acc[k] = acc.get(k, 0.0) + float(v)
+    return acc
 
 
 def train_reinforce_with_episode_log(
