@@ -240,6 +240,9 @@ python scripts/run_evaluation.py
 # Regenerate README figures without retraining
 python scripts/generate_readme_demo_figures.py
 
+# Push figures + this README to the Hugging Face Space (needs HF_TOKEN)
+# python scripts/upload_figures_to_hf_space.py --readme
+
 ```
 
 The Streamlit UI runs with `streamlit run app.py`. The OpenEnv FastAPI server is in `dtm_openenv/` — health check at `/health`, API docs at `/docs`.
