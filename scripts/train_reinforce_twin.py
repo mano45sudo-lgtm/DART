@@ -84,47 +84,6 @@ def _git_stage_paths(paths: List[Path], *, cwd: Path) -> None:
         print("git add failed (not a git checkout?):", e)
 
 
-def _init_wandb(args: argparse.Namespace) -> Optional[Any]:
-    if not args.wandb:
-        return None
-    try:
-        import wandb
-    except ImportError:
-        print("wandb not installed; continuing without W&B logging")
-        return None
-    tags = [t.strip() for t in args.wandb_tags.split(",") if t.strip()]
-    cfg = {
-        "model": args.model,
-        "max_steps_per_episode": args.max_steps,
-        "updates": args.updates,
-        "episodes_per_update": args.episodes_per_update,
-        "lr": args.lr,
-        "max_new_tokens": args.max_new_tokens,
-        "temperature": args.temperature,
-        "top_p": args.top_p,
-        "eval_every": args.eval_every,
-        "eval_seed_base": args.eval_seed_base,
-        "eval_seed_count": args.eval_seeds,
-        "random_eval_episodes": args.random_eval_episodes,
-        "load_in_4bit": bool(args.load_in_4bit),
-    }
-    run = wandb.init(
-        project=args.wandb_project,
-        entity=args.wandb_entity or None,
-        name=args.wandb_run_name or None,
-        tags=tags if tags else None,
-        config=cfg,
-    )
-    print("wandb run:", run.url)
-    return run
-
-
-def _wandb_log(run: Optional[Any], payload: Dict[str, Any]) -> None:
-    if run is None:
-        return
-    run.log(payload)
-
-
 def _plot_results(payload: Dict[str, Any], fig_dir: Path) -> None:
     plt.switch_backend("Agg")
     fig_dir.mkdir(parents=True, exist_ok=True)
@@ -258,11 +217,6 @@ def main() -> None:
         action="store_true",
         help="After saving JSON and PNGs, run `git add` on those paths (git repo root auto-detected)",
     )
-    p.add_argument("--wandb", action="store_true", help="Enable Weights & Biases live logging")
-    p.add_argument("--wandb-project", default="digital-twin-medicine", help="W&B project name")
-    p.add_argument("--wandb-entity", default="", help="W&B entity/user/team (optional)")
-    p.add_argument("--wandb-run-name", default="", help="W&B run name (optional)")
-    p.add_argument("--wandb-tags", default="openenv,digital-twin,reinforce", help="Comma-separated W&B tags")
     args = p.parse_args()
 
     if args.quick and args.judge_preset:
@@ -287,8 +241,6 @@ def main() -> None:
         args.random_eval_episodes = 20
         args.max_new_tokens = 40
         args.max_steps = 16
-
-    wb_run = _init_wandb(args)
 
     device_s = _device()
     eval_seed_list = [args.eval_seed_base + i for i in range(args.eval_seeds)]
@@ -337,14 +289,6 @@ def main() -> None:
     random_metrics = evaluate_agent(rng_agent, episodes=args.random_eval_episodes, seed=0, max_steps=args.max_steps)
     random_summary = summarize(random_metrics)
     random_returns = np.array([m.ep_return for m in random_metrics], dtype=float)
-    _wandb_log(
-        wb_run,
-        {
-            "baseline/random_avg_return": float(random_summary["avg_return"]),
-            "baseline/random_std_return": float(np.std(random_returns)),
-            "baseline/random_episodes": int(args.random_eval_episodes),
-        },
-    )
 
     train_update_idx: List[int] = []
     train_mean_ret: List[float] = []
@@ -371,15 +315,6 @@ def main() -> None:
         eval_stds.append(s)
         eval_parse.append(pr)
         print(f"  eval@{u}: mean_return={m:.3f} std={s:.3f} parse_ok_rate={pr:.3f}")
-        _wandb_log(
-            wb_run,
-            {
-                "eval/update": int(u),
-                "eval/llm_mean_return": float(m),
-                "eval/llm_std_return": float(s),
-                "eval/llm_parse_ok_rate": float(pr),
-            },
-        )
 
     snapshot_eval(0)
     u_mean = eval_means[0]
@@ -414,13 +349,6 @@ def main() -> None:
         train_update_idx.append(u)
         train_mean_ret.append(float(np.mean(batch_returns)))
         print(f"update {u}/{args.updates} train_batch_mean_return={train_mean_ret[-1]:.3f}")
-        _wandb_log(
-            wb_run,
-            {
-                "train/update": int(u),
-                "train/mean_episode_return": float(train_mean_ret[-1]),
-            },
-        )
         if u % args.eval_every == 0 or u == args.updates:
             snapshot_eval(u)
 
@@ -498,23 +426,6 @@ def main() -> None:
     p1 = args.fig_dir / "training_vs_baselines.png"
     p2 = args.fig_dir / "final_random_vs_trained.png"
     print("wrote plots to", args.fig_dir)
-    if wb_run is not None:
-        import wandb
-
-        wb_run.log(
-            {
-                "final/random_avg_return": float(payload["final_eval"]["random"]["avg_return"]),
-                "final/random_std_return": float(payload["final_eval"]["random"]["std_return"]),
-                "final/llm_mean_return": float(payload["final_eval"]["llm"]["mean_return"]),
-                "final/llm_std_return": float(payload["final_eval"]["llm"]["std_return"]),
-                "final/llm_parse_ok_rate": float(payload["final_eval"]["llm"]["parse_ok_rate"]),
-                "artifact/training_curve": wandb.Image(str(p1)),
-                "artifact/final_bar": wandb.Image(str(p2)),
-            }
-        )
-        wb_run.save(str(out_json))
-        wb_run.finish()
-
     if args.git_stage_artifacts:
         root = _git_root(repo_root)
         if root:
