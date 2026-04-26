@@ -3,8 +3,7 @@
 .venv/
 venv/
 wandb/
+.mplcache/
 
-# Generated plots (run Colab or plot_*.py); HF Git rejects pushing binary history
-docs/figures/*.png
-!docs/figures/.gitkeep
+# Large ad-hoc logs (keep committed demo JSON + figures for README)
 logs/*.png
