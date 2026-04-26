@@ -36,6 +36,11 @@ def main() -> None:
         default=("*.png", "*.svg"),
         help="Which file globs to upload (default: png and svg)",
     )
+    p.add_argument(
+        "--readme",
+        action="store_true",
+        help="Also upload repo root README.md (Space card + project readme on Hub).",
+    )
     args = p.parse_args()
     fdir: Path = args.figures_dir
     if not fdir.is_dir():
@@ -69,6 +74,20 @@ def main() -> None:
             commit_message=f"Add/update figure: {fp.name}",
         )
         print("uploaded", rel)
+    if args.readme:
+        rm = repo_root / "README.md"
+        if rm.is_file():
+            api.upload_file(
+                path_or_fileobj=str(rm),
+                path_in_repo="README.md",
+                repo_id=args.repo,
+                repo_type="space",
+                revision=args.branch,
+                commit_message="Sync README from GitHub",
+            )
+            print("uploaded README.md")
+        else:
+            print("skip README: missing", rm, file=sys.stderr)
     print("done. View:", f"https://huggingface.co/spaces/{args.repo}/tree/{args.branch}/docs/figures")
 
 
