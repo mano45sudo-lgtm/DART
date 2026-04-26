@@ -10,6 +10,12 @@ from .fall_detection import detect_and_recover
 from reward.rubric import RewardRubric
 
 
+def _action_signature(a: Dict[str, Any]) -> str:
+    t = str(a.get("type", "noop"))
+    d = str(a.get("drug", "none"))
+    return f"{t}|{d}"
+
+
 class DigitalTwinDiabetesEnv(gym.Env):
     """
     Gymnasium-compatible scaffold.
@@ -28,6 +34,12 @@ class DigitalTwinDiabetesEnv(gym.Env):
         self.auto_recover = True
         self._terminated = False
         self._truncated = False
+        # Anti-exploit + richer shaping (per episode, reset in reset())
+        self._last_action_sig: Optional[str] = None
+        self._noop_streak: int = 0
+        self._prev_dg: float = 0.0
+        self._hyper_cumulative: float = 0.0
+        self._intervention_count: int = 0
 
         # Spaces are kept permissive: actual agent interface uses JSON dict actions.
         self.observation_space = gym.spaces.Dict(
@@ -53,6 +65,11 @@ class DigitalTwinDiabetesEnv(gym.Env):
         patient_id = "P%04d" % int(gym.utils.seeding.np_random(seed=self._seed)[0].integers(0, 9999))
         self.twin.reset(seed=self._seed, patient_id=patient_id)
         self._trajectory = [self.twin.as_dict()["state"]]
+        self._last_action_sig = None
+        self._noop_streak = 0
+        self._prev_dg = 0.0
+        self._hyper_cumulative = 0.0
+        self._intervention_count = 0
         return self._obs(), {"patient_id": self.twin.profile.patient_id, "profile": self.twin.profile.__dict__}
 
     def step(self, action: Any) -> Tuple[Dict[str, Any], float, bool, bool, Dict[str, Any]]:
@@ -62,10 +79,26 @@ class DigitalTwinDiabetesEnv(gym.Env):
         prev_state = self.twin.as_dict()["state"]
 
         a_dict, parse_info = safe_action(action)
+        sig = _action_signature(a_dict)
+        if str(a_dict.get("type", "noop")) == "noop":
+            self._noop_streak += 1
+        else:
+            self._noop_streak = 0
+        action_repeat = 0
+        if self._last_action_sig is not None and sig == self._last_action_sig:
+            action_repeat = 1
+        self._last_action_sig = sig
+
         action_info = self.twin.apply_action(a_dict)
 
         prog_info = self.twin.step()
         next_state = self.twin.as_dict()["state"]
+        g0 = float(prev_state.get("fasting_glucose", 160.0))
+        g1 = float(next_state.get("fasting_glucose", 160.0))
+        dg = g1 - g0
+        dd = dg - self._prev_dg
+        self._prev_dg = dg
+        self._hyper_cumulative += max(0.0, (g1 - 180.0) / 25.0)
         if self.twin.state.week >= self.max_steps:
             self._truncated = True
 
@@ -86,9 +119,19 @@ class DigitalTwinDiabetesEnv(gym.Env):
             # pick the first alternative (Phase 6 can be upgraded to trial_simulator selection)
             recovery_action = fd.alternatives[0]
             self.twin.apply_action(recovery_action)
+            self._intervention_count += 1
 
         # reward
-        reward_info = {**prog_info, "terminated": self._terminated, "truncated": self._truncated}
+        reward_info = {
+            **prog_info,
+            "terminated": self._terminated,
+            "truncated": self._truncated,
+            "noop_streak": self._noop_streak,
+            "action_repeat": action_repeat,
+            "dd_glucose": float(dd),
+            "hyper_cumulative": float(self._hyper_cumulative),
+            "intervention_count": int(self._intervention_count),
+        }
         rr = self.rewarder.compute(prev_state=prev_state, next_state=next_state, info=reward_info)
         reward = float(rr.total)
 

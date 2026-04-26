@@ -1,0 +1,100 @@
+{
+  "mode": "council_rule",
+  "protocol": {
+    "max_steps": 12,
+    "updates": 6,
+    "episodes_per_update": 2
+  },
+  "by_update": [
+    {
+      "update": 1,
+      "mean_episode_return": -14.366182958507885,
+      "self_improvement": {
+        "window_mean_reward": -14.366182958507885,
+        "window_std_reward": 0.0,
+        "exploration": 0.1,
+        "use_fallback": 0.0
+      },
+      "council_weights": {
+        "treatment": 0.47,
+        "risk": 0.33999999999999997,
+        "diagnostic": 0.19
+      }
+    },
+    {
+      "update": 2,
+      "mean_episode_return": -30.752548849023114,
+      "self_improvement": {
+        "window_mean_reward": -22.5593659037655,
+        "window_std_reward": 11.586910440187259,
+        "exploration": 0.2,
+        "use_fallback": 0.0
+      },
+      "council_weights": {
+        "treatment": 0.44000000000000006,
+        "risk": 0.38000000000000006,
+        "diagnostic": 0.18000000000000002
+      }
+    },
+    {
+      "update": 3,
+      "mean_episode_return": -2.1382651267578345,
+      "self_improvement": {
+        "window_mean_reward": -15.752332311429612,
+        "window_std_reward": 14.357415009535243,
+        "exploration": 0.4,
+        "use_fallback": 0.0
+      },
+      "council_weights": {
+        "treatment": 0.41000000000000003,
+        "risk": 0.42000000000000004,
+        "diagnostic": 0.17
+      }
+    },
+    {
+      "update": 4,
+      "mean_episode_return": 8.101331788355921,
+      "self_improvement": {
+        "window_mean_reward": -9.788916286483229,
+        "window_std_reward": 16.72342369005326,
+        "exploration": 0.38,
+        "use_fallback": 0.0
+      },
+      "council_weights": {
+        "treatment": 0.4158415841584159,
+        "risk": 0.4158415841584159,
+        "diagnostic": 0.16831683168316833
+      }
+    },
+    {
+      "update": 5,
+      "mean_episode_return": 1.2726822303323155,
+      "self_improvement": {
+        "window_mean_reward": -7.57659658312012,
+        "window_std_reward": 15.304459065488693,
+        "exploration": 0.36,
+        "use_fallback": 0.0
+      },
+      "council_weights": {
+        "treatment": 0.4216253308499167,
+        "risk": 0.4117243407509068,
+        "diagnostic": 0.16665032839917657
+      }
+    },
+    {
+      "update": 6,
+      "mean_episode_return": -6.855841482195373,
+      "self_improvement": {
+        "window_mean_reward": -7.456470732965996,
+        "window_std_reward": 13.691886471521256,
+        "exploration": 0.33999999999999997,
+        "use_fallback": 0.0
+      },
+      "council_weights": {
+        "treatment": 0.4273518127226898,
+        "risk": 0.4076478621296107,
+        "diagnostic": 0.16500032514769958
+      }
+    }
+  ]
+}

@@ -7,6 +7,9 @@ Requires: pip install -r requirements_hackathon.txt  (or at least torch + transf
 Example (CPU demo, ~few minutes):
   python scripts/train_reinforce_twin.py --quick
 
+Rule-based multi-agent council (no LLM, CPU) + self-improvement logging:
+  python scripts/train_reinforce_twin.py --council-train --quick
+
 Stronger run for judges (GPU recommended), same as --judge-preset:
   python scripts/train_reinforce_twin.py --judge-preset
 
@@ -36,6 +39,7 @@ sys.path.insert(0, str(repo_root))
 sys.path.insert(0, str(repo_root / "scripts"))
 
 from evaluation.baseline_random_agent import RandomAgent  # noqa: E402
+from evaluation.baseline_rule_agent import RuleBasedAgent  # noqa: E402
 from evaluation.eval_metrics import summarize  # noqa: E402
 from run_evaluation import evaluate_agent  # noqa: E402
 from training.llm_reinforce import (  # noqa: E402
@@ -217,12 +221,31 @@ def main() -> None:
         action="store_true",
         help="After saving JSON and PNGs, run `git add` on those paths (git repo root auto-detected)",
     )
+    p.add_argument(
+        "--council-train",
+        action="store_true",
+        help="Rule-based multi-agent council + self-improvement (no LLM, CPU); skips REINFORCE",
+    )
+    p.add_argument(
+        "--council-out-json",
+        type=Path,
+        default=repo_root / "logs" / "council_training_last.json",
+        help="Output JSON for --council-train",
+    )
+    p.add_argument(
+        "--council-log-steps",
+        type=int,
+        default=2,
+        help="Per-episode step logs (first N episodes of first 2 updates) to limit JSON size",
+    )
     args = p.parse_args()
 
     if args.quick and args.judge_preset:
         p.error("--quick and --judge-preset are mutually exclusive")
     if args.quick and args.judge_schedule:
         p.error("--quick and --judge-schedule are mutually exclusive")
+    if args.council_train and (args.judge_preset or args.judge_schedule or args.load_in_4bit):
+        p.error("--council-train is a standalone path; do not combine with --judge-* or --load-in-4bit")
     if args.judge_preset and args.judge_schedule:
         p.error("--judge-preset and --judge-schedule are mutually exclusive")
     if args.judge_preset:
@@ -230,6 +253,23 @@ def main() -> None:
         _apply_judge_schedule_hyperparams(args)
     elif args.judge_schedule:
         _apply_judge_schedule_hyperparams(args)
+
+    if args.council_train:
+        if args.quick:
+            args.updates = 6
+            args.episodes_per_update = 2
+            args.max_steps = 12
+        from training.council_rollout import run_council_training
+
+        run_council_training(
+            max_steps=args.max_steps,
+            updates=args.updates,
+            episodes_per_update=args.episodes_per_update,
+            train_seed_base=args.train_seed_base,
+            out_path=args.council_out_json,
+            log_steps=int(args.council_log_steps),
+        )
+        return
 
     if args.quick:
         # Small public model so CPU smoke runs finish in minutes, not hours.
@@ -289,6 +329,9 @@ def main() -> None:
     random_metrics = evaluate_agent(rng_agent, episodes=args.random_eval_episodes, seed=0, max_steps=args.max_steps)
     random_summary = summarize(random_metrics)
     random_returns = np.array([m.ep_return for m in random_metrics], dtype=float)
+    rule_metrics = evaluate_agent(RuleBasedAgent(), episodes=args.random_eval_episodes, seed=2, max_steps=args.max_steps)
+    rule_summary = summarize(rule_metrics)
+    rule_returns = np.array([m.ep_return for m in rule_metrics], dtype=float)
 
     train_update_idx: List[int] = []
     train_mean_ret: List[float] = []
@@ -321,6 +364,7 @@ def main() -> None:
     u_std = eval_stds[0]
     u_parse = eval_parse[0]
 
+    no_grad_updates = 0
     for u in range(1, args.updates + 1):
         batch_returns: List[float] = []
         opt.zero_grad(set_to_none=True)
@@ -346,11 +390,19 @@ def main() -> None:
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
+        else:
+            no_grad_updates += 1
         train_update_idx.append(u)
         train_mean_ret.append(float(np.mean(batch_returns)))
         print(f"update {u}/{args.updates} train_batch_mean_return={train_mean_ret[-1]:.3f}")
         if u % args.eval_every == 0 or u == args.updates:
             snapshot_eval(u)
+
+    if no_grad_updates:
+        print(
+            f"WARNING: {no_grad_updates} update(s) had no valid REINFORCE step "
+            f"(no learning signal — check action parsing and rollout steps)."
+        )
 
     model.eval()
     final_llm_m, final_llm_s, final_pr = eval_mean_return(
@@ -386,6 +438,13 @@ def main() -> None:
             "std_return": float(np.std(random_returns)),
             "remission_rate": float(random_summary.get("remission_rate", 0.0)),
             "failure_rate": float(random_summary.get("failure_rate", 0.0)),
+            "episodes": int(args.random_eval_episodes),
+        },
+        "baseline_rule": {
+            "avg_return": float(rule_summary["avg_return"]),
+            "std_return": float(np.std(rule_returns)),
+            "remission_rate": float(rule_summary.get("remission_rate", 0.0)),
+            "failure_rate": float(rule_summary.get("failure_rate", 0.0)),
             "episodes": int(args.random_eval_episodes),
         },
         "baseline_untrained_llm": {
