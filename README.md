@@ -13,7 +13,7 @@ tags:
   - digital-twin
   - healthcare
   - personalized-medicine
-short_description: "RL agent for personalized T2DM treatment via stochastic digital twin"
+short_description: "Personalized T2DM RL agent in a stochastic digital twin"
 ---
 
 # 🧬 DART — Digital Twin Medicine
