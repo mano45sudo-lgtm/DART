@@ -2,8 +2,9 @@
 name = "digital-twin-medicine"
 version = "0.1.0"
 description = "Digital Twin Medicine — RL Agent for Personalized Treatment (OpenEnv-style)"
-requires-python = ">=3.10"
 readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
 dependencies = []
 
 [tool.ruff]
