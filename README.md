@@ -13,7 +13,7 @@
 
 *(If the repo is not a monorepo, the path is `.../DART/...` only when DART is nested; this project uses DART as the repo root.)*
 
-**GitHub images below** use `raw.githubusercontent.com` so the README still renders if figures are not committed (placeholders after `DART_Colab_submission.ipynb` or `plot_colab_*.py`). Commit generated PNGs into `docs/figures/` for stable thumbnails.
+**GitHub images** below use `https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/...` (broken until you add matching files on `main`). After Colab, copy PNGs into `docs/figures/` and commit to **GitHub** for this README. **Hugging Face’s Git server rejects PNG commits**; do not `git push huggingface` a branch that contains new binary figures — or keep the Space in sync only via the Hub UI / a docs-only policy.
 
 ---
 
