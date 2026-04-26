@@ -3,3 +3,8 @@
 .venv/
 venv/
 wandb/
+
+# Generated plots (run Colab or plot_*.py); HF Git rejects pushing binary history
+docs/figures/*.png
+!docs/figures/.gitkeep
+logs/*.png

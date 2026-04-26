@@ -8,10 +8,12 @@
 |---|---|
 | **UI (Streamlit Space)** | `<ADD_SPACE_URL_HERE>` |
 | **OpenEnv env server (Docker / FastAPI)** | `<ADD_OPENENV_SPACE_URL_HERE>` |
-| **Single Colab link (submit this)** | `https://colab.research.google.com/github/<USER>/<REPO>/blob/<BRANCH>/DART/training/DART_Colab_submission.ipynb` |
+| **Single Colab link (submit this)** | `https://colab.research.google.com/github/mano45sudo-lgtm/DART/blob/main/training/DART_Colab_submission.ipynb` |
 | **Mini-blog / demo video** | `<ADD_BLOG_OR_VIDEO_URL_HERE>` |
 
-Replace `USER`, `REPO`, and `BRANCH` after you push to GitHub, or in a monorepo keep the `DART/` path segment if the notebook lives under a subdirectory.
+*(If the repo is not a monorepo, the path is `.../DART/...` only when DART is nested; this project uses DART as the repo root.)*
+
+**GitHub images below** use `raw.githubusercontent.com` so the README still renders if figures are not committed (placeholders after `DART_Colab_submission.ipynb` or `plot_colab_*.py`). Commit generated PNGs into `docs/figures/` for stable thumbnails.
 
 ---
 
@@ -139,28 +141,28 @@ Run **`DART_Colab_submission.ipynb`**, then commit **`logs/colab_experiment.json
 
 **Training curve (smoothed episode return by training order, multiple policies)**
 
-![Training curve](docs/figures/training_curve.png)
+![Training curve](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/training_curve.png)
 
 *Expected file:* `docs/figures/training_curve.png`  
 *Meaning:* Smoothed per-episode return (`ma_window` from config) for `random`, `distilgpt2`, optional `llama-8b-4bit` if trained on GPU, and council when present.
 
 **Final comparison (tail mean ± std)**
 
-![Final comparison bars](docs/figures/final_comparison_bars.png)
+![Final comparison bars](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/final_comparison_bars.png)
 
 *Expected file:* `docs/figures/final_comparison_bars.png`  
 *Meaning:* Mean return over the **last** `bar_tail_episodes` episodes per model, with error bars (std). **To record numbers:** read the bar height and error from the plot, or compute from `colab_experiment.json` (filter `episodes` by `model`, take the last *K* `reward` values, `mean` and `std`).
 
 **Example glucose trajectories (1 episode each, legacy overlay)**
 
-![Behavior glucose](docs/figures/behavior_glucose.png)
+![Behavior glucose](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/behavior_glucose.png)
 
 *Expected file:* `docs/figures/behavior_glucose.png` (written when `glucose.random` and `glucose.trained` exist in JSON)  
 *Meaning:* FPG vs time step for one random vs one distil trace from the run (separate from the same-seed `traces` used in judge figures).
 
 **Council + self-repair (episode return + repair markers)**
 
-![Self-repair episodes](docs/figures/self_repair_episodes.png)
+![Self-repair episodes](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/self_repair_episodes.png)
 
 *Expected file:* `docs/figures/self_repair_episodes.png` (when council rows exist)  
 *Meaning:* Council episode return over index; **dashed vertical lines** at `self_repair_episodes` from the JSON (exploration / fallback signals in the self-improvement loop).
@@ -169,42 +171,42 @@ Run **`DART_Colab_submission.ipynb`**, then commit **`logs/colab_experiment.json
 
 **Clinical state (example episode per policy: same seed for random vs distil when using default `judge_trace_env_seed`)**
 
-![Judge clinical state](docs/figures/judge_clinical_state.png)
+![Judge clinical state](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_clinical_state.png)
 
 *File:* `docs/figures/judge_clinical_state.png`  
 *Panels:* FPG, HbA1c, eGFR, **weekly cost (USD)** vs simulated week. Shows **dynamics and cost** in one view.
 
 **Per-step and cumulative return (rubric as it accrues)**
 
-![Judge step and cumulative return](docs/figures/judge_step_and_cumulative_return.png)
+![Judge step and cumulative return](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_step_and_cumulative_return.png)
 
 *File:* `docs/figures/judge_step_and_cumulative_return.png`  
 *Left:* Dense weekly reward. *Right:* Cumulative return over the same example episode.
 
 **Action mix (parsed `type` counts)**
 
-![Judge action mix](docs/figures/judge_action_mix.png)
+![Judge action mix](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_action_mix.png)
 
 *File:* `docs/figures/judge_action_mix.png`  
 *Meaning:* How often each JSON action `type` was used in the logged example episode per policy.
 
 **Rubric — summed over the traced episode**
 
-![Judge rubric episode totals](docs/figures/judge_rubric_episode_totals.png)
+![Judge rubric episode totals](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_rubric_episode_totals.png)
 
 *File:* `docs/figures/judge_rubric_episode_totals.png`  
 *Meaning:* Stacked component sums; names match `RewardRubric` in `reward/rubric.py`. Use this to explain **which terms** moved (glucose, cost, hypo, inactivity, …).
 
 **Outcome distributions (N eval episodes, different seeds)**
 
-![Judge outcome distributions](docs/figures/judge_outcome_distributions.png)
+![Judge outcome distributions](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_outcome_distributions.png)
 
 *File:* `docs/figures/judge_outcome_distributions.png`  
 *Meaning:* Boxplots of **final HbA1c**, **final fasting glucose**, and **episode return** across `judge_endpoint_episodes` per model (`endpoints` in JSON). This is the **stochastic** half of the story (many patients), complementing the **single-seed** traces above.
 
 **Council — example glucose (optional file)**
 
-![Judge council glucose](docs/figures/judge_council_glucose_example.png)
+![Judge council glucose](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_council_glucose_example.png)
 
 *File:* `docs/figures/judge_council_glucose_example.png` (if council trace is present)  
 *Meaning:* One non-LLM council rollout on the FPG axis for narrative contrast with random / LM.
@@ -318,7 +320,7 @@ To mirror **all** Colab figures without the notebook, train with the CLI to prod
 | **Streamlit UI** | Streamlit | Root `app.py` → `ui/app.py` |
 | **OpenEnv server** | Docker, `spaces/openenv` | `uvicorn dtm_openenv.server.app:app` — see Space README; health `/health`, docs `/docs` |
 
-Pushing: use the Hugging Face Git remote for each Space, or the web UI. **If your Space only tracks a subtree**, keep large binary histories out of the Space branch (e.g. single-commit or image URLs via `raw.githubusercontent.com`) to avoid LFS and push limits.
+Pushing: use the Hugging Face Git remote for the Space, or the web UI. This repo’s **Hugging Face Git remote rejects PNG binaries** in history; all training figures should be **generated** (`DART_Colab_submission.ipynb` or the `plot_colab_*.py` scripts) and referenced in the README via **`raw.githubusercontent.com/.../docs/figures/...`**, not re-committed as `git` binaries, so `git push huggingface main` can succeed. After you add PNGs to a GitHub **release** or commit them on GitHub, the same raw URLs work for both GitHub and HF README rendering.
 
 **Model auth:** for gated LMs, use a **read** token in Colab and `huggingface-cli login` locally as needed.
 
