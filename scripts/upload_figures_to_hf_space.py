@@ -41,11 +41,22 @@ def main() -> None:
         action="store_true",
         help="Also upload repo root README.md (Space card + project readme on Hub).",
     )
+    p.add_argument(
+        "--streamlit",
+        action="store_true",
+        help="Also upload root app.py and ui/app.py (Streamlit entry + UI).",
+    )
+    p.add_argument(
+        "--skip-figures",
+        action="store_true",
+        help="Skip docs/figures upload (only --readme / --streamlit parts).",
+    )
     args = p.parse_args()
     fdir: Path = args.figures_dir
-    if not fdir.is_dir():
-        print("missing figures dir:", fdir, file=sys.stderr)
-        sys.exit(1)
+    if not args.skip_figures:
+        if not fdir.is_dir():
+            print("missing figures dir:", fdir, file=sys.stderr)
+            sys.exit(1)
     try:
         from huggingface_hub import HfApi, login
     except ImportError as e:
@@ -56,24 +67,25 @@ def main() -> None:
     if tok:
         login(token=tok, add_to_git_credential=False)
     api = HfApi()
-    files: list[Path] = []
-    for pat in args.patterns:
-        files.extend(sorted(fdir.glob(pat)))
-    files = [x for x in files if x.is_file()]
-    if not files:
-        print("no files matched under", fdir, file=sys.stderr)
-        sys.exit(1)
-    for fp in files:
-        rel = f"docs/figures/{fp.name}"
-        api.upload_file(
-            path_or_fileobj=str(fp),
-            path_in_repo=rel,
-            repo_id=args.repo,
-            repo_type="space",
-            revision=args.branch,
-            commit_message=f"Add/update figure: {fp.name}",
-        )
-        print("uploaded", rel)
+    if not args.skip_figures:
+        files: list[Path] = []
+        for pat in args.patterns:
+            files.extend(sorted(fdir.glob(pat)))
+        files = [x for x in files if x.is_file()]
+        if not files:
+            print("no files matched under", fdir, file=sys.stderr)
+            sys.exit(1)
+        for fp in files:
+            rel = f"docs/figures/{fp.name}"
+            api.upload_file(
+                path_or_fileobj=str(fp),
+                path_in_repo=rel,
+                repo_id=args.repo,
+                repo_type="space",
+                revision=args.branch,
+                commit_message=f"Add/update figure: {fp.name}",
+            )
+            print("uploaded", rel)
     if args.readme:
         rm = repo_root / "README.md"
         if rm.is_file():
@@ -88,6 +100,21 @@ def main() -> None:
             print("uploaded README.md")
         else:
             print("skip README: missing", rm, file=sys.stderr)
+    if args.streamlit:
+        for rel_name in ("app.py", "ui/app.py"):
+            src = repo_root / rel_name
+            if not src.is_file():
+                print("skip streamlit: missing", src, file=sys.stderr)
+                continue
+            api.upload_file(
+                path_or_fileobj=str(src),
+                path_in_repo=rel_name,
+                repo_id=args.repo,
+                repo_type="space",
+                revision=args.branch,
+                commit_message=f"Sync Streamlit: {rel_name}",
+            )
+            print("uploaded", rel_name)
     print("done. View:", f"https://huggingface.co/spaces/{args.repo}/tree/{args.branch}/docs/figures")
 
 

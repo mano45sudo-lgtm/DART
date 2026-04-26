@@ -282,8 +282,8 @@ def _sanitize_obs_df(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def main():
-    st.set_page_config(page_title="Digital Twin Medicine (T2DM)", layout="wide")
+def _run_app_ui() -> None:
+    """All Streamlit UI after `st.set_page_config` (called from root `app.py` or `main()`)."""
     _inject_css()
 
     top = st.container()
@@ -337,6 +337,12 @@ def main():
         _render_patient(df)
     else:
         _render_tools(log)
+
+
+def main() -> None:
+    """Local entry: `streamlit run ui/app.py` — `set_page_config` must be first Streamlit call."""
+    st.set_page_config(page_title="Digital Twin Medicine (T2DM)", layout="wide")
+    _run_app_ui()
 
 
 if __name__ == "__main__":
