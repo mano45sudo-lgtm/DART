@@ -1,13 +1,19 @@
 ---
-
-title: DART — Digital Twin Medicine emoji: 🧬 colorFrom: purple colorTo: blue sdk: streamlit sdk_version: "1.35.0" app_file: app.py pinned: false tags:
-
-- openenv
-- World modeling
-- digital-twin
-- healthcare
-- personalized-medicine short_description: RL agent for personalized T2DM treatment via stochastic digital twin
-
+title: "DART — Digital Twin Medicine"
+emoji: 🧬
+colorFrom: purple
+colorTo: blue
+sdk: streamlit
+sdk_version: "1.56.0"
+app_file: app.py
+pinned: false
+tags:
+  - openenv
+  - World modeling
+  - digital-twin
+  - healthcare
+  - personalized-medicine
+short_description: "RL agent for personalized T2DM treatment via stochastic digital twin"
 ---
 
 # 🧬 DART — Digital Twin Medicine
