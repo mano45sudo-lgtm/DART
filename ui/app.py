@@ -14,7 +14,7 @@ import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import plotly.express as px
@@ -36,12 +36,74 @@ ACTION_PRESETS: Dict[str, Dict[str, Any]] = {
     "Add Sulfonylurea": {"type": "add", "drug": "sulfonylurea", "dose": 0.7},
 }
 
+# Publication PNGs in docs/figures (same order as README “Results & Figures”).
+_PUBLICATION_FIGURES: tuple[tuple[str, str], ...] = (
+    ("training_curve.png", "Training curve"),
+    ("behavior_glucose.png", "Behavior — glucose trajectories"),
+    ("final_comparison_bars.png", "Final comparison — tail mean ± std"),
+    ("judge_clinical_state.png", "Clinical state — matched traces"),
+    ("judge_rubric_episode_totals.png", "Reward rubric — stacked components"),
+    ("judge_outcome_distributions.png", "Outcome distributions"),
+    ("judge_action_mix.png", "Action mix"),
+    ("self_repair_episodes.png", "Self-repair episodes"),
+    ("judge_step_and_cumulative_return.png", "Judge — step reward & cumulative return"),
+    ("judge_council_glucose_example.png", "Council — glucose example"),
+)
+
 
 @dataclass
 class RolloutLog:
     obs: List[Dict[str, Any]] = field(default_factory=list)
     rewards: List[float] = field(default_factory=list)
     infos: List[Dict[str, Any]] = field(default_factory=list)
+
+
+def _figures_dir() -> Path:
+    return repo_root / "docs" / "figures"
+
+
+def _resolve_figure(filename: str) -> Optional[Path]:
+    p = _figures_dir() / filename
+    if p.is_file():
+        return p
+    alt = p.with_suffix(".svg" if p.suffix == ".png" else ".png")
+    return alt if alt.is_file() else None
+
+
+def _render_publication_figure_file(path: Path, caption: str) -> None:
+    if path.suffix.lower() == ".svg":
+        import base64
+
+        b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+        st.markdown(
+            f"<p class='muted' style='margin:0 0 8px 0'>{caption}</p>"
+            f'<img src="data:image/svg+xml;base64,{b64}" '
+            'style="width:100%;max-height:520px;object-fit:contain;border-radius:12px"/>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.image(str(path), caption=caption, use_container_width=True)
+
+
+def _render_publication_figures() -> None:
+    st.markdown("<div class='section-title'>Publication figures</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='muted'>From <code>docs/figures/</code> (same plots as the README). "
+        "Regenerate with <code>python scripts/generate_readme_demo_figures.py</code> "
+        "or your Colab export.</div>",
+        unsafe_allow_html=True,
+    )
+    missing: list[str] = []
+    for fname, cap in _PUBLICATION_FIGURES:
+        p = _resolve_figure(fname)
+        if p is None:
+            missing.append(fname)
+            continue
+        st.markdown("<div class='card' style='margin-top:14px;padding:12px'>", unsafe_allow_html=True)
+        _render_publication_figure_file(p, cap)
+        st.markdown("</div>", unsafe_allow_html=True)
+    if missing:
+        st.warning("Missing figure files: " + ", ".join(missing))
 
 
 def _inject_css() -> None:
@@ -309,7 +371,7 @@ def _run_app_ui() -> None:
 
     with st.sidebar:
         st.markdown("### Control Panel")
-        page = st.radio("Navigate", ["Dashboard", "Patient", "Tools"], label_visibility="collapsed")
+        page = st.radio("Navigate", ["Dashboard", "Patient", "Figures", "Tools"], label_visibility="collapsed")
 
         st.markdown("#### Episode")
         seed = st.number_input("Seed", min_value=0, max_value=1_000_000, value=0, step=1)
@@ -344,6 +406,8 @@ def _run_app_ui() -> None:
         _render_overview(df, log)
     elif page == "Patient":
         _render_patient(df)
+    elif page == "Figures":
+        _render_publication_figures()
     else:
         _render_tools(log)
 

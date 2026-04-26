@@ -44,7 +44,7 @@ def main() -> None:
     p.add_argument(
         "--streamlit",
         action="store_true",
-        help="Also upload app.py, ui/app.py, requirements.txt, and LICENSE for the Space build.",
+        help="Also upload app.py, ui/app.py, requirements.txt, LICENSE, and logs/colab_experiment.json if present.",
     )
     p.add_argument(
         "--skip-figures",
@@ -115,6 +115,17 @@ def main() -> None:
                 commit_message=f"Sync Streamlit: {rel_name}",
             )
             print("uploaded", rel_name)
+        demo_json = repo_root / "logs" / "colab_experiment.json"
+        if demo_json.is_file():
+            api.upload_file(
+                path_or_fileobj=str(demo_json),
+                path_in_repo="logs/colab_experiment.json",
+                repo_id=args.repo,
+                repo_type="space",
+                revision=args.branch,
+                commit_message="Sync demo colab_experiment.json",
+            )
+            print("uploaded logs/colab_experiment.json")
     print("done. View:", f"https://huggingface.co/spaces/{args.repo}/tree/{args.branch}/docs/figures")
 
 

@@ -346,6 +346,18 @@ python scripts/generate_readme_demo_figures.py
 
 Smoothed per-episode return across `random`, `distilgpt2`, optional `llama-8b-4bit`, and council. The trained agent improves consistently over the random baseline across the update schedule.
 
+![Training curve — smoothed episode return by policy](docs/figures/training_curve.png)
+
+---
+
+### Behavior — glucose trajectories
+
+
+
+Random vs trained fasting glucose trajectories over simulated weeks (same logs as the publication Colab / `scripts/generate_readme_demo_figures.py`).
+
+![Behavior — glucose trajectories](docs/figures/behavior_glucose.png)
+
 ---
 
 ### Final comparison — tail mean ± std
@@ -353,6 +365,8 @@ Smoothed per-episode return across `random`, `distilgpt2`, optional `llama-8b
 
 
 Mean return over the last `bar_tail_episodes` episodes per model with standard deviation error bars. Values are computed directly from `colab_experiment.json`.
+
+![Final comparison — tail mean ± std across policies](docs/figures/final_comparison_bars.png)
 
 ---
 
@@ -362,6 +376,8 @@ Mean return over the last `bar_tail_episodes` episodes per model with standard
 
 FPG, HbA1c, eGFR, and weekly cost across simulated weeks for matched random vs trained traces. The `judge_trace_env_seed` ensures an identical virtual patient across policies — isolating the effect of the policy itself.
 
+![Clinical state — matched random vs trained traces](docs/figures/judge_clinical_state.png)
+
 ---
 
 ### Reward rubric — what actually changed
@@ -369,6 +385,8 @@ FPG, HbA1c, eGFR, and weekly cost across simulated weeks for matched random vs t
 
 
 Stacked component sums per policy. The trained agent's gains are concentrated in `glucose_improvement` and `hypoglycemia_penalty`. Cost and instability terms show less movement — a concrete, specific finding for the next training iteration.
+
+![Reward rubric — stacked component totals by policy](docs/figures/judge_rubric_episode_totals.png)
 
 ---
 
@@ -378,6 +396,8 @@ Stacked component sums per policy. The trained agent's gains are concentrated in
 
 Boxplots of final HbA1c, final FPG, and episode return across `judge_endpoint_episodes` independent seeds per model. The trained policy must generalise across patient variation — not just perform on one seed.
 
+![Outcome distributions — final labs and return across seeds](docs/figures/judge_outcome_distributions.png)
+
 ---
 
 ### Action mix
@@ -386,6 +406,8 @@ Boxplots of final HbA1c, final FPG, and episode return across `judge_endpoint_e
 
 Action type counts per policy during the traced episode. The random policy distributes uniformly. The trained policy develops preferences — a qualitative signal of learned clinical strategy.
 
+![Action mix — action type counts per policy](docs/figures/judge_action_mix.png)
+
 ---
 
 ### Self-repair episodes
@@ -393,6 +415,28 @@ Action type counts per policy during the traced episode. The random policy distr
 
 
 Council episode return with dashed vertical lines at `self_repair_episodes` — moments where the agent corrected its trajectory following a safety intervention or exploration signal.
+
+![Self-repair episodes — council return with repair markers](docs/figures/self_repair_episodes.png)
+
+---
+
+### Judge — step reward and cumulative return
+
+
+
+Per-step reward and cumulative return for the traced episode used in the judge panels.
+
+![Judge — step reward and cumulative return](docs/figures/judge_step_and_cumulative_return.png)
+
+---
+
+### Council — glucose example trace
+
+
+
+Glucose dynamics for the council self-repair trace window (example episode).
+
+![Council — glucose example trace](docs/figures/judge_council_glucose_example.png)
 
 ---
 

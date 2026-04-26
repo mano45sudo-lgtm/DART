@@ -126,50 +126,50 @@
     },
     {
       "episode": 18,
-      "reward": -36.9213748753488,
-      "avg_reward": 5.272780295618316,
+      "reward": -37.0595326499744,
+      "avg_reward": 5.265104863694671,
       "action_count": 16,
       "model": "random"
     },
     {
       "episode": 19,
       "reward": -5.242680429776469,
-      "avg_reward": 4.719334994281748,
+      "avg_reward": 4.712063532459348,
       "action_count": 16,
       "model": "random"
     },
     {
       "episode": 20,
       "reward": -8.312760690068497,
-      "avg_reward": 4.067730210064235,
+      "avg_reward": 4.060822321332956,
       "action_count": 16,
       "model": "random"
     },
     {
       "episode": 21,
       "reward": 13.024553954911838,
-      "avg_reward": 4.49424562648555,
+      "avg_reward": 4.487666684836713,
       "action_count": 16,
       "model": "random"
     },
     {
       "episode": 22,
       "reward": -54.920254555296324,
-      "avg_reward": 1.7935865273136467,
+      "avg_reward": 1.7873066284670287,
       "action_count": 16,
       "model": "random"
     },
     {
       "episode": 23,
       "reward": 33.67559400069062,
-      "avg_reward": 3.179760765286559,
+      "avg_reward": 3.1737539055202286,
       "action_count": 16,
       "model": "random"
     },
     {
       "episode": 24,
       "reward": 38.38220051526261,
-      "avg_reward": 4.646529088202228,
+      "avg_reward": 4.640772514259495,
       "action_count": 16,
       "model": "random"
     },
@@ -1904,7 +1904,7 @@
       {
         "model": "random",
         "episode": 3,
-        "return": 24.48156968181814,
+        "return": 24.039447872271865,
         "final_hba1c": 4.8,
         "final_fpg": 70.0,
         "final_egfr": 76.70767772773868,
