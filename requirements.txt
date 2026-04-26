@@ -15,7 +15,7 @@ ipykernel>=6.29
 rich>=13.7
 
 # UI
-streamlit>=1.35
+streamlit>=1.56.0
 plotly>=5.22
 
 # Hugging Face Hub (upload Colab figures to a Space: scripts/upload_figures_to_hf_space.py)

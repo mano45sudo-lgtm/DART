@@ -44,7 +44,7 @@ def main() -> None:
     p.add_argument(
         "--streamlit",
         action="store_true",
-        help="Also upload root app.py and ui/app.py (Streamlit entry + UI).",
+        help="Also upload app.py, ui/app.py, and requirements.txt for the Space build.",
     )
     p.add_argument(
         "--skip-figures",
@@ -101,7 +101,7 @@ def main() -> None:
         else:
             print("skip README: missing", rm, file=sys.stderr)
     if args.streamlit:
-        for rel_name in ("app.py", "ui/app.py"):
+        for rel_name in ("app.py", "ui/app.py", "requirements.txt"):
             src = repo_root / rel_name
             if not src.is_file():
                 print("skip streamlit: missing", src, file=sys.stderr)

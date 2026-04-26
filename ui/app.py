@@ -1,4 +1,14 @@
+"""Streamlit UI for DART. When loaded as ``_dart_ui_app`` from root ``app.py``,
+``set_page_config`` is skipped (root already configured). For ``streamlit run ui/app.py``,
+``__name__`` is ``__main__`` and we configure here.
+"""
+
 from __future__ import annotations
+
+import streamlit as st
+
+if __name__ == "__main__":
+    st.set_page_config(page_title="Digital Twin Medicine (T2DM)", layout="wide")
 
 import json
 import sys
@@ -9,7 +19,6 @@ from typing import Any, Dict, List
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import streamlit as st
 
 repo_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(repo_root))
@@ -340,8 +349,7 @@ def _run_app_ui() -> None:
 
 
 def main() -> None:
-    """Local entry: `streamlit run ui/app.py` — `set_page_config` must be first Streamlit call."""
-    st.set_page_config(page_title="Digital Twin Medicine (T2DM)", layout="wide")
+    """Local entry: ``streamlit run ui/app.py`` (``set_page_config`` runs at import when ``__main__``)."""
     _run_app_ui()
 
 
