@@ -119,6 +119,16 @@ python scripts/train_reinforce_twin.py --judge-schedule --load-in-4bit --model u
 
 *Figure 3: Random policy episode-return variability in the stochastic twin.*
 
+### W&B result views (side tracking)
+
+![W&B training curve view](docs/figures/training_vs_baselines.png)
+
+*Figure 4: The same training curve you commit in-repo is also logged to W&B as a live chart/artifact.*
+
+![W&B final comparison view](docs/figures/final_random_vs_trained.png)
+
+*Figure 5: The same held-out final comparison is logged to W&B for run-level traceability.*
+
 ### Latest logged metrics (`logs/training_last.json`)
 
 | Metric | Value |
@@ -216,6 +226,26 @@ Recommended flow:
 3. Run smoke once
 4. Run judge schedule (`--judge-preset` or `--judge-schedule`)
 5. Commit updated `logs/*.json` and `docs/figures/*.png`
+
+### W&B side method (optional, does not replace main judging artifacts)
+
+1. Login once in Colab:
+   ```bash
+   wandb login
+   ```
+2. Run the **same judge command** with W&B enabled:
+   ```bash
+   python scripts/train_reinforce_twin.py --judge-preset \
+     --wandb \
+     --wandb-project digital-twin-medicine \
+     --wandb-run-name distilgpt2-judge \
+     --wandb-tags openenv,digital-twin,reinforce,judge
+   ```
+3. Copy the printed run URL (`wandb run: https://wandb.ai/...`) into the top table (`<ADD_WANDB_RUN_URL_HERE>`).
+4. Still commit primary judging artifacts to git:
+   - `logs/training_last.json`
+   - `docs/figures/training_vs_baselines.png`
+   - `docs/figures/final_random_vs_trained.png`
 
 ---
 

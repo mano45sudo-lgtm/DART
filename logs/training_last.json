@@ -10,11 +10,12 @@
     "top_p": 0.92,
     "eval_seed_base": 9000,
     "eval_seed_count": 8,
-    "device": "cpu"
+    "device": "cpu",
+    "load_in_4bit": false
   },
   "baseline_random": {
-    "avg_return": 9.549999983654072,
-    "std_return": 31.19490256419905,
+    "avg_return": 9.235304073225077,
+    "std_return": 31.013850957271906,
     "remission_rate": 0.8,
     "failure_rate": 0.25,
     "episodes": 20
@@ -22,7 +23,7 @@
   "baseline_untrained_llm": {
     "mean_return": -24.850319621340525,
     "std_return": 21.814222874295247,
-    "parse_ok_rate": 0.0,
+    "parse_ok_rate": 1.0,
     "eval_episodes": 8
   },
   "training": {
@@ -80,11 +81,11 @@
       21.814222874295247
     ],
     "eval_llm_parse_ok": [
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
     ]
   },
   "final_eval": {
@@ -96,7 +97,7 @@
     "llm": {
       "mean_return": -24.850319621340525,
       "std_return": 21.814222874295247,
-      "parse_ok_rate": 0.0,
+      "parse_ok_rate": 1.0,
       "eval_episodes": 8
     }
   }
