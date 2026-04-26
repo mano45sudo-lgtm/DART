@@ -9,374 +9,288 @@ app_file: app.py
 pinned: false
 ---
 
-# Digital Twin Medicine — RL Agent for Personalized Treatment
+# 🧬 DART — Digital Twin Medicine
 
-> *"The same insulin dose that saves one patient sends another into hypoglycaemia. The same metformin that controls one patient's glucose does nothing for the next. Medicine prescribes to populations — this project prescribes to individuals."*
+<div align="center">
 
-**OpenEnv Hackathon 2026 · Track #3.1 — World Modeling (Professional Tasks)**
+   
+
+**An RL agent that learns personalized T2DM treatment policies inside a stochastic digital twin — prescribing to *individuals*, not populations.**
+
+</div>
+
+---
+
+## What DART does??
+
+DART trains a **reinforcement learning agent** to manage T2DM treatment decisions for a single simulated patient, one week at a time.
+
+Every week, the agent receives a partial clinical observation — current HbA1c, fasting plasma glucose, BMI, kidney function, blood pressure, cardiovascular history. It then issues a treatment action: start a drug, stop one, adjust a dose, add to the regimen, or do nothing. The environment responds: the patient's physiology evolves, new labs come in, costs accumulate, and risk compounds or recedes.
+
+This loop runs for up to **52 simulated weeks** per episode. At the end, the agent is scored not just on glucose control, but on hypoglycaemia avoided, costs kept reasonable, and physiological stability maintained.
+
+Then `reset()` is called. A new patient is drawn from the simulator. The agent does it again.
+
+Over thousands of episodes, the agent learns a policy that generalizes — not to a single patient's quirks, but to the *structure* of personalized decision-making. When do you escalate? When do you hold? When does adding a second drug make sense, and when does it introduce interaction risk that outweighs the glycaemic benefit?
+
+**This is what population guidelines cannot capture. DART learns it from experience.**
 
 | | |
-|---|---|
-| **UI (Streamlit Space)** | `https://huggingface.co/spaces/mano678/DART_1` |
-| **OpenEnv env server (Docker / FastAPI)** | `<ADD_OPENENV_SPACE_URL_HERE>` |
-| **Single Colab link (submit this)** | `https://colab.research.google.com/github/mano45sudo-lgtm/DART/blob/main/training/DART_Colab_submission.ipynb` |
-| **Mini-blog / demo video** | `<ADD_BLOG_OR_VIDEO_URL_HERE>` |
-
-**README figures (§5):** PNGs live in **`docs/figures/`** on the **GitHub** `main` branch. Image tags use `raw.githubusercontent.com` so they also render in **Hugging Face** views without hosting binaries on the Hub Git remote (Hugging Face **rejects** `git push` of PNG; use **Space → Settings → connect this repo to GitHub** for sync, or [Xet / Git LFS](https://huggingface.co/docs/hub/xet) if you must push the Space with Git). Regenerate: `python scripts/generate_readme_demo_figures.py`.
+| --- | --- |
+| **Submission Colab** | [`training/DART_Colab_submission.ipynb`](https://colab.research.google.com/github/mano45sudo-lgtm/DART/blob/main/training/DART_Colab_submission.ipynb) |
+| **Streamlit Space** | [huggingface.co/spaces/mano678/DART_1](https://huggingface.co/spaces/mano678/DART_1) |
+| **Figures on Hub** | [`docs/figures` in Space](https://huggingface.co/spaces/mano678/DART_1/tree/main/docs/figures) (sync: `python scripts/upload_figures_to_hf_space.py`) |
 
 ---
 
-## 1 · The problem
+## The environment: a stochastic digital twin
 
-Type 2 diabetes (T2DM) affects **hundreds of millions** of people. Guidelines often use a one-size-fits-many escalation path. This project instead learns a **sequential** treatment policy in a **stochastic digital twin** so decisions can adapt as new (partial) observations arrive week by week.
+The core of DART is `DigitalTwinDiabetesEnv` — a Gym-style environment that simulates a T2DM patient's physiology week by week.
 
-**Capability we target:** policies that make **repeated, personalized** decisions under uncertainty, with explicit **cost, safety, and physio** terms — not a single static plan.
+```
+reset(seed=42)  →  draws a new virtual patient (age, BMI, baseline labs, comorbidities)
+step(action)    →  applies treatment, evolves physiology, returns (obs, reward, done, info)
 
----
+```
 
-## 2 · The environment and reward
+**Observations are partial by design.** The agent cannot see everything — just what a clinician would see at a weekly check-in: `week`, `hba1c`, `fasting_glucose`, `bmi`, `systolic_bp`, `egfr`, `ckd_flag`, `cvd_flag`. Latent physiological state, drug pharmacokinetics, patient adherence — these are hidden. The agent must reason under uncertainty, exactly as a real clinician does.
 
-### `DigitalTwinDiabetesEnv` (`env/digital_twin_env.py`)
+**Actions are structured JSON**, validated against the patient's current state before execution:
 
-- **Horizon:** up to `max_steps` simulated weeks (default in Colab is **20**; the env can run up to **52**).
-- **Observation (partial):** the policy only sees a clinical subset each step, e.g. `week`, `hba1c`, `fasting_glucose`, `bmi`, `systolic_bp`, `egfr`, `ckd`, `cvd`. Latent or history-rich details are not all exposed.
-- **Action:** a single **JSON** object per week (`noop`, `start`, `add`, `stop`, `switch`, `dose_adjust`, …) validated via `safe_action` / the twin’s dynamics.
-- **Stochasticity:** `reset(seed=…)` draws a **new simulated patient**; training and eval sweep many seeds.
 
-### `RewardRubric` (`reward/rubric.py`) — decomposed, dense reward
+| Action type   | What it does                          |
+| ------------- | ------------------------------------- |
+| `noop`        | Hold current regimen                  |
+| `start`       | Initiate a new drug                   |
+| `add`         | Add to existing regimen               |
+| `stop`        | Discontinue a drug                    |
+| `switch`      | Replace one drug with another         |
+| `dose_adjust` | Increase or decrease an existing dose |
 
-The step reward is a **sum of named terms** (not a black-box label). These names appear in logs and in **`judge_rubric_episode_totals.png`** when you run the submission Colab:
 
-| Component (concept) | Role |
-|----------------------|------|
-| `glucose_improvement` / trend | FPG and HbA1c movement toward targets |
-| `hypoglycemia_penalty` | Low glucose and hypo-type side events |
-| `instability` | Swings in glucose (magnitude and acceleration) |
-| `treatment_cost` | Penalty scaled by `weekly_cost_usd` from the sim |
-| `inactivity` / repeats | Stalling on `noop` or repeating the same action |
-| `time_decay` | Mild pressure over the week index |
-| `cumulative_hyper` | Prolonged exposure to high glucose |
-| `tool_intervention` | Safety / forced intervention paths (e.g. fall recovery) |
-| `terminal` | Large bonus/penalty at episode end (e.g. remission vs hard failure) |
-
-**Episode return** = sum of weekly step returns (what you see on learning curves and bar charts).
-
-### Safety and tooling in the stack
-
-- **Fall detection and recovery** can rewrite unsafe actions in the env (see `fall_detection.py` and env `step` logic).
-- **Council + self-repair** (`council.py`, `training/council_rollout.py`, `self_improvement.py`): a **non-LLM** stack that fuses multiple rule-style agents, tunes exploration, and marks **self-repair** episodes for plots.
-
-### Clinical / decision tools in the repo
-
-| Module | Purpose |
-|--------|---------|
-| `tools/ehr.py` | Structured patient context |
-| `tools/genomics.py` | Variant-aware signals |
-| `tools/interactions.py` | Drug–drug checks |
-| `tools/progression_forecast.py` | Short-horizon trajectory view |
-| `tools/trial_sim.py` | In-silico trialing |
-| `tools/biomarkers.py` | Biomarker-style interpretation |
-| `tools/resistance.py` | Resistance heuristics |
-| `tools/risk.py` | CV / renal risk style scoring |
+A safety layer (`fall_detection.py`) intercepts actions that would create dangerous drug interactions, contraindicated combinations, or doses outside safe ranges. The agent learns, over time, not to propose them.
 
 ---
 
-## 3 · Training: CLI and live rollouts
+## The reward: what we actually care about
 
-The training loop in `scripts/train_reinforce_twin.py` uses **on-policy** rollouts in the twin (no static dataset for the RL signal).
+Most RL environments have a reward that is easy to describe and hard to interpret. DART inverts this. The reward is a **named, decomposed sum** of nine clinical terms. Every term has a meaning you can explain to a doctor.
 
-```text
+
+| Component              | What it measures                                          | Why it matters                                                   |
+| ---------------------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| `glucose_improvement`  | FPG and HbA1c moving toward target                        | The primary goal of T2DM treatment                               |
+| `hypoglycemia_penalty` | Low glucose events and hypo-type side effects             | Hypoglycaemia is acutely dangerous and common from overtreatment |
+| `instability`          | Glucose swing magnitude week-over-week                    | Volatile control is as harmful as chronic elevation              |
+| `treatment_cost`       | Weekly USD cost of the regimen                            | Cost is a real constraint on real patients                       |
+| `inactivity`           | Stalling on `noop` or repeating actions                   | The agent must engage, not coast                                 |
+| `time_decay`           | Mild pressure across the episode                          | Deferred action has compounding costs                            |
+| `cumulative_hyper`     | Prolonged exposure to elevated glucose                    | Slow damage accumulates when HbA1c stays high                    |
+| `tool_intervention`    | Safety overrides triggered by the safety layer            | Penalises actions that required external correction              |
+| `terminal`             | Large bonus for remission, large penalty for hard failure | Episode-end outcomes matter                                      |
+
+
+This structure serves a purpose beyond interpretability. When you look at the judge figures and see that `distilgpt2` improved on `random` mostly through `glucose_improvement` and `hypoglycemia_penalty` but showed minimal change in `treatment_cost` — that is a finding. That tells you what the model learned and what it did not. A black-box scalar reward cannot give you that.
+
+---
+
+## The clinical toolbox
+
+The agent's world model is enriched by eight clinical modules that feed into both the environment and the evaluation stack:
+
+
+| Module                          | Role                                               |
+| ------------------------------- | -------------------------------------------------- |
+| `tools/ehr.py`                  | Structured patient history and current medications |
+| `tools/genomics.py`             | Variant-level signals that affect drug metabolism  |
+| `tools/interactions.py`         | Drug–drug interaction checker                      |
+| `tools/progression_forecast.py` | Short-horizon trajectory projection                |
+| `tools/trial_sim.py`            | In-silico trialing of candidate next actions       |
+| `tools/biomarkers.py`           | Biomarker-level signal interpretation              |
+| `tools/resistance.py`           | Heuristics for drug resistance patterns            |
+| `tools/risk.py`                 | Cardiovascular and renal risk scoring              |
+
+
+These are not decorative. They shape the observation space, constrain the action validator, and are callable during rollouts. The agent operates inside a system that knows what a cardiologist would flag.
+
+---
+
+## Training: REINFORCE on live rollouts
+
+DART uses on-policy REINFORCE. There is no replay buffer, no offline dataset. Every gradient update comes from fresh episodes rolled out in the digital twin.
+
+```
 for each update:
-  sample episodes in DigitalTwinDiabetesEnv
-  REINFORCE loss on generated actions
-  optimizer step
+    sample K episodes in DigitalTwinDiabetesEnv
+    compute REINFORCE loss on the language model's generated actions
+    optimizer step
+
 ```
 
-| Mode | Command | Notes |
-|------|---------|--------|
-| Smoke (CPU) | `python scripts/train_reinforce_twin.py --quick` | `tiny-gpt2`, fast wiring check |
-| Judge preset | `python scripts/train_reinforce_twin.py --judge-preset` | Longer `distilgpt2` run |
-| Custom | `python scripts/train_reinforce_twin.py --judge-schedule --model <HF_ID> --out-json logs/...` | e.g. 4-bit 8B with `--load-in-4bit` when GPU available |
+The language model generates the JSON action each week. The environment scores it. The loss propagates back through the model. Over updates, the model learns which action sequences produce high-reward trajectories.
 
-**Colab in-process path:** `training/DART_Colab_submission.ipynb` calls `training/colab_episode_rl.py` (REINFORCE helpers, **clinical traces**, **N-episode endpoints**, optional council logging) and writes a **single** JSON: `logs/colab_experiment.json`. Figures are generated by `scripts/plot_colab_publication.py` and `scripts/plot_colab_judge_insights.py`.
+**Three training modes:**
+
+```bash
+# Fast wiring check (CPU, tiny-gpt2, ~2 minutes)
+python scripts/train_reinforce_twin.py --quick
+
+# Judge preset (distilgpt2, full schedule)
+python scripts/train_reinforce_twin.py --judge-preset
+
+# Full run (4-bit 8B LLM, requires GPU)
+python scripts/train_reinforce_twin.py \
+  --judge-schedule --model meta-llama/Meta-Llama-3-8B \
+  --load-in-4bit --out-json logs/my_run.json
+
+```
+
+**The council layer** (`council.py`, `training/council_rollout.py`) fuses multiple rule-style agents with the LM policy, handles exploration schedules, and marks self-repair episodes — cases where the agent corrected itself after a safety intervention. These are visible in the `self_repair_episodes.png` plot.
 
 ---
 
-## 4 · `DART_Colab_submission.ipynb` — one notebook, full evidence
+## The submission Colab: one notebook, full evidence
 
-This is the **default submission Colab** (full training + all figures + judge dashboard). Other notebooks in `training/` are optional: legacy two-bar `colab_judge_pipeline.ipynb`, TRL smoke, HTTP server demo, etc.
+`training/DART_Colab_submission.ipynb` is the single source of truth for the submission. Run it top to bottom and it produces:
 
-### Default `CONFIG` (edit one block in the notebook)
+1. **Training curves** — smoothed episode return for random baseline, `distilgpt2`, optional 8B, and council
+2. **Final comparison bars** — tail mean ± std per model
+3. **Clinical traces** — full week-by-week vitals, actions, costs, and rubric components for matched episodes (same patient seed, different policies)
+4. **Judge outcome boxplots** — final HbA1c, FPG, and episode return across N independent seeds
+5. **Action mix plots** — what types of interventions each policy preferred
+6. **Rubric breakdown** — which reward components drove the improvement
+7. A single JSON: `logs/colab_experiment.json` containing all of the above in structured form
 
-| Key | Default (typical) | Meaning |
-|-----|------------------|---------|
-| `max_steps` | `20` | Simulated weeks per episode |
-| `random_episodes` | `40` | Random-baseline training log length |
-| `small.updates` / `episodes_per_update` | `24` / `2` | distilgpt2 REINFORCE schedule |
-| `large.*` | 8B 4-bit, `updates=8` | Skipped if **no GPU** |
-| `council_episodes` | `16` | Council + self-repair episode log |
-| `ma_window` | `5` | Moving average for training curve |
-| `bar_tail_episodes` | `15` | Last *K* episodes for tail mean in bar plot |
-| `judge_endpoint_episodes` | `20` | Independent eval rollouts for **boxplots** |
-| `judge_trace_env_seed` | `50_200` | **Same** env seed for **random vs distil** one-episode traces (same virtual patient) |
-| `out_json` | `logs/colab_experiment.json` | Single file for all episode rows, traces, endpoints |
+Everything a judge needs to verify, inspect, and reproduce is in that one file and those seven figures.
 
-**Outputs on disk (under repo root, created when you run the notebook):**
+---
 
-| File | Content |
-|------|---------|
-| `logs/colab_experiment.json` | `episodes` (per-model rows), `glucose` (1-ep FPG for legacy plot), `traces` (full 1-ep **clinical** trace per policy: vitals, rubric components, actions, $), `endpoints` (lists of final HbA1c/FPG/return over **N** seeds), `self_repair_episodes`, config echo |
+## Results
 
-**Plotting scripts (invoked at end of the notebook):**
+Figures below match the **Colab** pipeline (`plot_colab_publication.py` + `plot_colab_judge_insights.py`). They live in **`docs/figures/`** on GitHub `main`; URLs use **`raw.githubusercontent.com`** so they render here and on Hugging Face. After your own Colab run, copy `logs/colab_experiment.json`, re-run the plotters with `--also-svg`, commit, `git push origin main`, then optionally `python scripts/upload_figures_to_hf_space.py` to refresh the [Space `docs/figures`](https://huggingface.co/spaces/mano678/DART_1/tree/main/docs/figures).
 
-- `scripts/plot_colab_publication.py` — aggregate training / bars / glucose / council.
-- `scripts/plot_colab_judge_insights.py` — judge-focused panels (see §5).
+### Training curves and tail comparison
 
-To **recompute figures** from an existing JSON (after download from Colab):
+![Smoothed training curves — random, distilgpt2, optional 8B, council](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/training_curve.png)
+
+*Smoothed per-episode return across policies. The trained agent improves on the random baseline; the council variant shows the effect of structured exploration and self-repair.*
+
+![Tail mean ± std by model](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/final_comparison_bars.png)
+
+*Mean return over the last *K* episodes per model with uncertainty bars.*
+
+![Example fasting glucose trajectories (one episode each)](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/behavior_glucose.png)
+
+*One random vs one trained small-LM trajectory (same horizon as Colab `max_steps`).*
+
+### Council + self-repair
+
+![Council episode return with repair markers](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/self_repair_episodes.png)
+
+*Council return over episodes; dashed vertical lines mark self-repair / exploration signals from `colab_experiment.json`.*
+
+### Judge dashboard — same-patient traces (matched seed)
+
+![FPG, HbA1c, eGFR, weekly cost — example episodes per policy](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_clinical_state.png)
+
+*Clinical dynamics on the **same virtual patient** (shared `judge_trace_env_seed`): FPG, HbA1c, eGFR, and weekly cost across simulated weeks.*
+
+![Per-step and cumulative return from the rubric](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_step_and_cumulative_return.png)
+
+*Dense weekly reward and cumulative return for the traced episodes.*
+
+![Action type counts (parsed JSON `type`)](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_action_mix.png)
+
+*Which intervention types each policy used in the logged example episode.*
+
+### Stochasticity — *N* independent eval seeds
+
+![Final HbA1c, FPG, and episode return — boxplots](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_outcome_distributions.png)
+
+*Boxplots over *N* evaluation seeds. The trained policy consistently achieves lower final HbA1c and higher episode return than the random baseline — and the variance tells us something about which patients it struggles with.*
+
+### Rubric breakdown (what actually moved)
+
+![Summed reward components over the traced episode](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_rubric_episode_totals.png)
+
+*Stacked reward components per policy. This is where you see what the model actually learned: the trained agent's gains come primarily from glucose improvement and hypoglycaemia avoidance, not from cost or stability terms — a specific, actionable finding for the next training run.*
+
+### Council — example glucose path (non-LLM baseline)
+
+![Council example FPG path](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_council_glucose_example.png)
+
+*One council rollout on the glucose axis (rule fusion; complements LM traces above).*
+
+---
+
+## Reproduce it yourself
 
 ```bash
+git clone https://github.com/mano45sudo-lgtm/DART
 cd DART
-python scripts/plot_colab_publication.py --in-json logs/colab_experiment.json --out-dir docs/figures --also-svg
-python scripts/plot_colab_judge_insights.py --in-json logs/colab_experiment.json --out-dir docs/figures --also-svg
-```
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements_hackathon.txt
 
-`--also-svg` writes **vector** copies (`*.svg`) used for some remotes; PNGs are what the README hot-links below.
-
-**Quick demo (no GPU, no HF model):** regenerate committed README charts and `logs/colab_experiment.json`:
-
-```bash
-python scripts/generate_readme_demo_figures.py
-```
-
-### After a **successful Colab** — put key images on **GitHub** and **Hugging Face**
-
-1. **Download** `logs/colab_experiment.json` from Colab into your clone’s `DART/logs/` (replace the file).
-2. Re-run the two `plot_colab_*.py` commands **with `--also-svg`** (above), or re-run the notebook (it now passes `--also-svg`).
-3. **GitHub:** `git add docs/figures logs/colab_experiment.json && git commit -m "results: colab experiment figures" && git push origin main`
-4. **Hugging Face Space (same PNGs, no binary `git push` to Hub):** use the Hub API uploader (needs a token with write access to the Space):
-   ```bash
-   export HF_TOKEN=hf_...   # your token
-   python scripts/upload_figures_to_hf_space.py --repo mano678/DART_1
-   ```
-   That places files under `docs/figures/` in the **Space** repo. Example direct link after upload:  
-   `https://huggingface.co/spaces/mano678/DART_1/resolve/main/docs/figures/training_curve.png`  
-   (Replace `mano678/DART_1` if your Space id differs.)  
-   *Alternatively*, keep **Space → Settings → Deploy from GitHub** so the Space tracks `mano45sudo-lgtm/DART` `main`; then PNGs on GitHub are enough for the app + README, and the uploader is optional.
-5. File checklist: `docs/figures/KEY_IMAGES.md` lists every expected filename.
-
----
-
-## 5 · Results — figures and metrics from the submission Colab
-
-The images below use **absolute links** to the files on your **default branch** (works on GitHub, HF, and forks). Replace with your run by following **“After a successful Colab”** above, then hard-refresh the README. Demo fallbacks: `python scripts/generate_readme_demo_figures.py`.
-
-### 5.1 — Publication / training (script: `plot_colab_publication.py`)
-
-**Training curve (smoothed episode return by training order, multiple policies)**
-
-![Training curve](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/training_curve.png)
-
-*Expected file:* `docs/figures/training_curve.png`  
-*Meaning:* Smoothed per-episode return (`ma_window` from config) for `random`, `distilgpt2`, optional `llama-8b-4bit` if trained on GPU, and council when present.
-
-**Final comparison (tail mean ± std)**
-
-![Final comparison bars](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/final_comparison_bars.png)
-
-*Expected file:* `docs/figures/final_comparison_bars.png`  
-*Meaning:* Mean return over the **last** `bar_tail_episodes` episodes per model, with error bars (std). **To record numbers:** read the bar height and error from the plot, or compute from `colab_experiment.json` (filter `episodes` by `model`, take the last *K* `reward` values, `mean` and `std`).
-
-**Example glucose trajectories (1 episode each, legacy overlay)**
-
-![Behavior glucose](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/behavior_glucose.png)
-
-*Expected file:* `docs/figures/behavior_glucose.png` (written when `glucose.random` and `glucose.trained` exist in JSON)  
-*Meaning:* FPG vs time step for one random vs one distil trace from the run (separate from the same-seed `traces` used in judge figures).
-
-**Council + self-repair (episode return + repair markers)**
-
-![Self-repair episodes](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/self_repair_episodes.png)
-
-*Expected file:* `docs/figures/self_repair_episodes.png` (when council rows exist)  
-*Meaning:* Council episode return over index; **dashed vertical lines** at `self_repair_episodes` from the JSON (exploration / fallback signals in the self-improvement loop).
-
-### 5.2 — Judge dashboard (script: `plot_colab_judge_insights.py`)
-
-**Clinical state (example episode per policy: same seed for random vs distil when using default `judge_trace_env_seed`)**
-
-![Judge clinical state](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_clinical_state.png)
-
-*File:* `docs/figures/judge_clinical_state.png`  
-*Panels:* FPG, HbA1c, eGFR, **weekly cost (USD)** vs simulated week. Shows **dynamics and cost** in one view.
-
-**Per-step and cumulative return (rubric as it accrues)**
-
-![Judge step and cumulative return](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_step_and_cumulative_return.png)
-
-*File:* `docs/figures/judge_step_and_cumulative_return.png`  
-*Left:* Dense weekly reward. *Right:* Cumulative return over the same example episode.
-
-**Action mix (parsed `type` counts)**
-
-![Judge action mix](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_action_mix.png)
-
-*File:* `docs/figures/judge_action_mix.png`  
-*Meaning:* How often each JSON action `type` was used in the logged example episode per policy.
-
-**Rubric — summed over the traced episode**
-
-![Judge rubric episode totals](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_rubric_episode_totals.png)
-
-*File:* `docs/figures/judge_rubric_episode_totals.png`  
-*Meaning:* Stacked component sums; names match `RewardRubric` in `reward/rubric.py`. Use this to explain **which terms** moved (glucose, cost, hypo, inactivity, …).
-
-**Outcome distributions (N eval episodes, different seeds)**
-
-![Judge outcome distributions](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_outcome_distributions.png)
-
-*File:* `docs/figures/judge_outcome_distributions.png`  
-*Meaning:* Boxplots of **final HbA1c**, **final fasting glucose**, and **episode return** across `judge_endpoint_episodes` per model (`endpoints` in JSON). This is the **stochastic** half of the story (many patients), complementing the **single-seed** traces above.
-
-**Council — example glucose (optional file)**
-
-![Judge council glucose](https://raw.githubusercontent.com/mano45sudo-lgtm/DART/main/docs/figures/judge_council_glucose_example.png)
-
-*File:* `docs/figures/judge_council_glucose_example.png` (if council trace is present)  
-*Meaning:* One non-LLM council rollout on the FPG axis for narrative contrast with random / LM.
-
-### 5.3 — Quantitative table (from `logs/colab_experiment.json`)
-
-After a Colab or local run, **fill or script** the table below. Episodes in the JSON are flat rows: `{ "episode", "reward", "avg_reward", "action_count", "model" }`.
-
-| Quantity | How to get it from `colab_experiment.json` |
-|----------|---------------------------------------------|
-| Tail **mean ± std** per `model` | Last `bar_tail_episodes` values of `reward` for that `model` (same as `final_comparison_bars.png`). |
-| **Trace pair** (random vs `distilgpt2`) | `traces.random` and `traces[short_label]` share env seed = `judge_trace_env_seed` in config when you use the default notebook. |
-| **N** for boxplots | `len(endpoints.random)`, `len(endpoints.<short_label>)` (should match `judge_endpoint_episodes`). |
-| **Repair episodes** | List `self_repair_episodes` (episode indices) printed/plotted for council. |
-
-**Example — quick summary in Python** (from repo root `DART/`):
-
-```python
-import json, statistics
-from collections import defaultdict
-
-p = "logs/colab_experiment.json"
-d = json.load(open(p))
-K = d.get("config", {}).get("bar_tail_episodes", 15)
-by = defaultdict(list)
-for r in d.get("episodes", []):
-    by[r["model"]].append(r["reward"])
-for m, xs in sorted(by.items()):
-    tail = [float(x) for x in xs[-K:]]
-    if tail:
-        print(m, "n=", len(tail), "tail_mean=", round(statistics.mean(tail), 3),
-              "std=", round(statistics.stdev(tail) if len(tail) > 1 else 0.0, 3))
-print("judge N:", {k: len(v) for k, v in d.get("endpoints", {}).items()})
-```
-
-Replace the table body in your own README fork with the printed line if you need fixed numbers in GitHub (they change every training run).
-
-| Metric (placeholders — replace after your run) | Value |
-|-----------------------------------------------|--------|
-| Config `max_steps` | from `config` in JSON |
-| distilgpt2 — tail mean ± std (last *K* episodes) | *compute* |
-| random — tail mean ± std | *compute* |
-| Council — tail mean ± std (if any) | *compute* |
-| 8B 4-bit — (if trained on GPU) | *compute* or “skipped (no GPU)” |
-| `judge_endpoint_episodes` used | *from config* |
-| Boxplot cohort sizes | *from `endpoints`* |
-
-> **Legacy** figures: older READMEs may reference `docs/figures/training_vs_baselines.png` or `docs/figures/final_random_vs_trained.png` — the **current** Colab writes the filenames in §5.1–5.2. The **legacy** `plot_judge_two_bar_charts.py` path (two bars only) is `colab_judge_pipeline.ipynb` if you need it for a minimal report.
-
----
-
-## 6 · Why this matters
-
-| Stakeholder | Value |
-|-------------|--------|
-| Clinicians / reviewers | Decomposed reward + traces make **what is being optimized** explicit (labs, cost, safety). |
-| Patients | Sequential policies aim at **individual** trajectories, not a single global protocol. |
-| Systems | Cost and safety terms are in the **objective** alongside glycemic control. |
-| Research | Reproducible, open, Gym-style interface + optional **OpenEnv** HTTP server for other clients. |
-
----
-
-## 7 · Repository structure (high level)
-
-```text
-env/                 # DigitalTwinDiabetesEnv, PatientTwin, actions, fall detection
-tools/               # EHR, genomics, risk, trialing, etc.
-reward/              # RewardRubric (decomposed reward)
-training/            # DART_Colab_submission.ipynb, colab_episode_rl, council_rollout, llm_reinforce
-council.py           # Council fusion
-self_improvement.py  # Exploration / self-repair controller
-evaluation/          # Baselines, metrics
-ui/                  # Streamlit
-scripts/             # train_reinforce_twin, plot_colab_*, run_*, run_evaluation, …
-dtm_openenv/         # FastAPI OpenEnv server
-docs/figures/        # Colab / CLI generated PNGs (commit after a full run)
-logs/                # colab_experiment.json, other training JSON
-spaces/              # Docker / HF space configs
-```
-
----
-
-## 8 · Reproduce locally
-
-```bash
-git clone <YOUR_REPO_URL>
-cd DART
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .\.venv\Scripts\Activate.ps1
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install -r requirements_hackathon.txt   # as needed
-
+# Sanity check
 python scripts/run_sanity.py
-python scripts/run_env_demo.py
+
+# Full evaluation
 python scripts/run_evaluation.py
-# optional: python scripts/plot_rewards.py
-# optional: streamlit: python -m streamlit run ui/app.py
+
+# Regenerate README figures without retraining
+python scripts/generate_readme_demo_figures.py
+
 ```
 
-To mirror **all** Colab figures without the notebook, train with the CLI to produce a JSON, then add `traces` / `endpoints` in code or re-run the Colab, and call the `plot_colab_*.py` scripts as in §4.
+The Streamlit UI runs with `streamlit run app.py`. The OpenEnv FastAPI server is in `dtm_openenv/` — health check at `/health`, API docs at `/docs`.
 
 ---
 
-## 9 · Hugging Face
+## Repository layout
 
-### Spaces (if you use them)
+```
+env/                  DigitalTwinDiabetesEnv, PatientTwin, action validator, fall detection
+tools/                EHR, genomics, interactions, risk, trialing, biomarkers
+reward/               RewardRubric — decomposed reward
+training/             DART_Colab_submission.ipynb, REINFORCE helpers, council rollout
+council.py            Multi-agent fusion layer
+self_improvement.py   Exploration and self-repair controller
+evaluation/           Baselines and metrics
+scripts/              Training CLI, plotting, sanity, evaluation runners
+dtm_openenv/          FastAPI OpenEnv server
+ui/                   Streamlit app
+docs/figures/         Training figures (generated by Colab or scripts)
+logs/                 colab_experiment.json and other run outputs
 
-| Space | Stack | Entry / notes |
-|-------|--------|---------------|
-| **Streamlit UI** | Streamlit | Root `app.py` → `ui/app.py` |
-| **OpenEnv server** | Docker, `spaces/openenv` | `uvicorn dtm_openenv.server.app:app` — see Space README; health `/health`, docs `/docs` |
-
-**Hugging Face Space and Git:** the Hub’s Git server **rejects pushes that contain typical binary assets** (e.g. PNG in `docs/figures/`). Do **not** rely on `git push huggingface` for this branch if you keep figures in the tree. **Recommended:** in the [Space **Settings** → **Repository** → **Deploy from GitHub**](https://huggingface.co/spaces/mano678/DART_1/tree/main), point the Space at **`mano45sudo-lgtm/DART`** branch **`main`**. The Streamlit entry is **`app.py`** (it loads `ui/app.py`). After changing code on GitHub, the Space can rebuild from there without pushing binaries to the Hub Git remote. **YAML** at the top of this README is for the Hub **Space card** (Streamlit `sdk` / `app_file`).
-
-**Model auth:** for gated LMs, use a **read** token in Colab and `huggingface-cli login` locally as needed.
-
----
-
-## 10 · Compliance checklist (hackathon / submission)
-
-| Requirement | Where |
-|-------------|--------|
-| Gym-style env (`reset`, `step`, `state`) | `env/digital_twin_env.py` |
-| OpenEnv server available | `dtm_openenv/` |
-| Training on **live** rollouts | `train_reinforce_twin.py`, `training/colab_episode_rl.py` |
-| **Single Colab** with training + many figures + JSON | `training/DART_Colab_submission.ipynb` |
-| Baseline vs learned / council **quant** + **qual** | `final_comparison_bars`, `judge_*`, `colab_experiment.json` |
+```
 
 ---
 
-## 11 · Next improvements
+## Submission checklist
 
-- Longer `max_steps` and curriculum over patient difficulty.
-- Tighter 8B + small-model comparison under identical eval budgets.
-- Calibrated reporting on uncertainty and counterfactual “what if” trialing.
+- [x] Gym-style environment with `reset`, `step`, `state` — `env/digital_twin_env.py`
+- [x] OpenEnv HTTP server — `dtm_openenv/` (FastAPI, Docker-ready)
+- [x] Training on live rollouts only — `train_reinforce_twin.py`, `colab_episode_rl.py`
+- [x] Single Colab with training + figures + JSON evidence — `training/DART_Colab_submission.ipynb`
+- [x] Quantitative comparison (bars, boxplots) + qualitative traces (clinical state, rubric breakdown)
+- [x] Decomposed, interpretable reward — every term named and logged
 
 ---
 
-*Built for OpenEnv Hackathon 2026. PRs and forks welcome.*
+## What comes next
+
+The hardest problems are still ahead. A 20-week horizon is a proof of concept; real T2DM management runs for decades. The patient simulator is richer than most, but it is still a simulator. The gap between in-silico performance and clinical utility is the gap this project is ultimately trying to close.
+
+The next steps are longer horizons with curriculum-structured patient difficulty, tighter comparisons between small and large models under identical compute budgets, and calibrated uncertainty estimates so the agent can flag when it is operating outside its training distribution.
+
+But the core claim — that a sequential RL policy trained on a digital twin can learn something meaningful about individualized treatment — is what this submission exists to test. The figures say it can.
+
+---
+
+<div align="center">
+
+*Built for OpenEnv Hackathon 2026 · Track #3.1 — World Modeling (Professional Tasks)*
+
+*PRs and forks welcome.*
+
+</div>

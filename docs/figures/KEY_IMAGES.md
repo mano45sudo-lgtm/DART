@@ -26,6 +26,5 @@ export HF_TOKEN=hf_...   # read/write for your account
 python scripts/upload_figures_to_hf_space.py --repo mano678/DART_1
 ```
 
-Direct links (after upload or GitHub-linked sync), pattern:
-
-`https://huggingface.co/spaces/mano678/DART_1/resolve/main/docs/figures/<filename>.png`
+- **Browse on Hub:** [spaces/mano678/DART_1 → docs/figures](https://huggingface.co/spaces/mano678/DART_1/tree/main/docs/figures)
+- **Direct file (pattern):** `https://huggingface.co/spaces/mano678/DART_1/resolve/main/docs/figures/<filename>.png`
